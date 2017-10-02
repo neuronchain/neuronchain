@@ -70,6 +70,8 @@ namespace graphene { namespace chain {
       uint8_t                 account_fee_scale_bitshifts         = GRAPHENE_DEFAULT_ACCOUNT_FEE_SCALE_BITSHIFTS; ///< number of times to left bitshift account registration fee at each scaling
       uint8_t                 max_authority_depth                 = GRAPHENE_MAX_SIG_CHECK_DEPTH;
       extensions_type         extensions;
+      uint16_t                importance_score_block_count        = GRAPHENE_IMPORTANCE_SCORE_BLOCK_COUNT; ///< number of blocks that take part in computation of the importance score
+      share_type              min_transfer_for_importance         = GRAPHENE_MIN_TRANSFER_FOR_IMPORTANCE;
 
       /** defined in fee_schedule.cpp */
       void validate()const;
@@ -107,4 +109,6 @@ FC_REFLECT( graphene::chain::chain_parameters,
             (account_fee_scale_bitshifts)
             (max_authority_depth)
             (extensions)
+            (importance_score_block_count)
+            (min_transfer_for_importance)
           )

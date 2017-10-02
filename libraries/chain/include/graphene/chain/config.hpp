@@ -169,3 +169,7 @@
 ///@}
 
 #define GRAPHENE_FBA_STEALTH_DESIGNATED_ASSET (asset_id_type(743))
+
+
+#define GRAPHENE_IMPORTANCE_SCORE_BLOCK_COUNT                43200
+#define GRAPHENE_MIN_TRANSFER_FOR_IMPORTANCE                  1000

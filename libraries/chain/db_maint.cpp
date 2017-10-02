@@ -159,7 +159,7 @@ void database::pay_workers( share_type& budget )
 void database::update_active_witnesses()
 { try {
    assert( _witness_count_histogram_buffer.size() > 0 );
-   share_type stake_target = (_total_voting_stake-_witness_count_histogram_buffer[0]) / 2;
+   share_type stake_target = (_total_transfer_rate-_witness_count_histogram_buffer[0]) / 2;
 
    /// accounts that vote for 0 or 1 witness do not get to express an opinion on
    /// the number of witnesses to have (they abstain and are non-voting accounts)
@@ -244,7 +244,7 @@ void database::update_active_witnesses()
 void database::update_active_committee_members()
 { try {
    assert( _committee_count_histogram_buffer.size() > 0 );
-   share_type stake_target = (_total_voting_stake-_witness_count_histogram_buffer[0]) / 2;
+   share_type stake_target = (_total_transfer_rate-_witness_count_histogram_buffer[0]) / 2;
 
    /// accounts that vote for 0 or 1 witness do not get to express an opinion on
    /// the number of witnesses to have (they abstain and are non-voting accounts)
@@ -716,9 +716,178 @@ void deprecate_annual_members( database& db )
    return;
 }
 
+
+
+using transfer_graph_type = std::unordered_multimap<object_id_type, object_id_type>;
+
+uint32_t rec_cycle_search(const transfer_graph_type& transfer_graph, object_id_type current, object_id_type cycle_target, 
+                              uint16_t length, std::unordered_set<object_id_type> visited = std::unordered_set<object_id_type>{})
+{
+  if (current == cycle_target) return 1;
+  if (length == 0) return 0;
+
+  if (visited.find(current) != visited.end()) return 0;
+  visited.insert(current);
+
+  size_t bucket_num = transfer_graph.bucket(current);
+  auto it = transfer_graph.cbegin(bucket_num);
+
+  uint32_t sum = 0;
+  for (; it != transfer_graph.cend(bucket_num); ++it)
+    sum += rec_cycle_search(transfer_graph, it->second, cycle_target, length - 1, visited);
+
+  return sum;
+}
+
+struct get_transfer_accounts_visitor
+{
+   struct tranfser_accounts_type
+   {
+      account_id_type from;
+      account_id_type to;
+      asset amount;
+   };
+
+   typedef fc::optional<tranfser_accounts_type> result_type;
+
+   result_type operator()( const transfer_operation& op )
+   {
+
+      return result_type{tranfser_accounts_type{op.from, op.to, op.amount}};
+   }
+
+   /*result_type operator()( const override_transfer_operation& op )
+   {
+      return result_type{tranfser_accounts_type{op.from, op.to}}
+   }*/
+
+   template <typename Operation>
+   result_type operator()( const Operation& op)
+   {
+      return result_type{};
+   }
+ };
+
+transfer_graph_type database::construct_transfer_graph(fc::time_point_sec last_maintenance, std::unordered_map<object_id_type, uint32_t>& account_transfers)
+{
+   /*auto transaction_expiration = get_global_properties().parameters.maximum_time_until_expiration;
+   if (last_maintenance > head_block_time() - transaction_expiration) {
+      transfer_graph_type transfer_graph;
+
+      const auto& all_transactions = get_index_type<transaction_index>().indices().get<by_trx_id>();
+      for (const auto& tr : all_transactions) {
+         for ( const auto& op : tr.trx.operations) {
+            get_transfer_accounts_visitor vtor;
+            auto account_pair = op.visit(vtor);
+            if (account_pair.valid()) {
+               account_id_type from {account_pair->from};
+               account_id_type to   {account_pair->to};
+
+               //std::cout << from(*this).name << " : " << uint64_t(from) << " -> " << to(*this).name << '\n';
+
+               auto pair = std::pair<const object_id_type, object_id_type>(to, from); //not a bug
+               if (std::find(transfer_graph.cbegin(), transfer_graph.cend(), pair) == transfer_graph.cend())
+                  transfer_graph.insert(std::move(pair));
+
+               ++account_transfers[object_id_type{from}];
+            }
+         }
+      }
+      return transfer_graph;
+   }*/
+
+   auto optional_block = fetch_block_by_id(head_block_id());
+   transfer_graph_type transfer_graph;
+   size_t blocks = 0;
+   auto max_blocks = get_global_properties().parameters.importance_score_block_count;
+   asset min_transfer_amount = get_global_properties().parameters.min_transfer_for_importance;
+
+   while(optional_block.valid() && (blocks++ < max_blocks)) {
+      auto& block = *optional_block;
+
+      if (last_maintenance > block.timestamp)
+         break;
+
+      for (const auto& tr : block.transactions) {
+         for ( const auto& op : tr.operations) {
+            get_transfer_accounts_visitor vtor;
+            auto account_pair = op.visit(vtor);
+            if (account_pair.valid() && account_pair->amount > min_transfer_amount) {
+               account_id_type from {account_pair->from};
+               account_id_type to   {account_pair->to};
+
+               //std::cout << from(*this).name << " : " << uint64_t(from) << " -> " << to(*this).name << '\n';
+               auto pair = std::pair<const object_id_type, object_id_type>(to, from); //not a bug
+               if (std::find(transfer_graph.cbegin(), transfer_graph.cend(), pair) == transfer_graph.cend())
+               transfer_graph.insert(std::move(pair));
+
+               ++account_transfers[object_id_type{from}];
+            }
+         }
+      }
+
+     optional_block = fetch_block_by_id(block.previous);
+   }
+
+   return transfer_graph;
+}
+
+void database::renew_importance_score(fc::time_point_sec last_maintenance)
+{
+   std::unordered_map<object_id_type, uint32_t> account_transfers;
+   auto transfer_graph = construct_transfer_graph(last_maintenance, account_transfers);
+   std::unordered_map<object_id_type, uint32_t> account_cycles;
+
+   auto max_blocks = get_global_properties().parameters.importance_score_block_count;
+
+   auto it = transfer_graph.cbegin();
+   for (; it != transfer_graph.cend(); ++it) {
+      auto cycle_target = it->first;
+
+      uint32_t cycles_count = rec_cycle_search(transfer_graph, it->second, cycle_target, 100);
+      
+      account_cycles[it->first] += cycles_count;// ? 1 : 0;
+   }
+
+   //std::cout << "Maint\n";
+   const auto& all_accounts = get_index_type<account_index>().indices().get<by_id>();
+   for (auto& sender_account : all_accounts) {
+
+      auto& sender_statistics = sender_account.statistics(*this);
+
+      auto acc_transfers = account_transfers[object_id_type(sender_account.id)];
+      auto acc_cycles    = account_cycles[sender_account.id];
+
+      if (acc_transfers > acc_cycles) 
+         acc_transfers -= acc_cycles;
+      else
+         acc_transfers = 0;
+
+      //std::cout << sender_account.name << " : " << uint64_t(sender_account.id) << " = " << acc_transfers << '\n';
+
+      modify(sender_account.statistics(*this), [&](account_statistics_object& s)
+      {  
+         auto& chrono = s.transfers_chronology;
+         auto last_score = 0;
+         if (!chrono.empty())
+            last_score = chrono.rbegin()->second;
+         chrono[head_block_num()] = last_score + acc_transfers;
+
+         auto it = chrono.lower_bound(head_block_num() - max_blocks);
+         auto minus = 0;
+         if (it != chrono.end())
+            minus = it->second;
+
+         s.importance_score = chrono.rbegin()->second - minus;
+      });
+   }
+}
+
 void database::perform_chain_maintenance(const signed_block& next_block, const global_property_object& global_props)
 {
    const auto& gpo = get_global_properties();
+
+   renew_importance_score(next_block.timestamp - gpo.parameters.maintenance_interval);
 
    distribute_fba_balances(*this);
    create_buyback_orders(*this);
@@ -733,7 +902,7 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
          d._vote_tally_buffer.resize(props.next_available_vote_id);
          d._witness_count_histogram_buffer.resize(props.parameters.maximum_witness_count / 2 + 1);
          d._committee_count_histogram_buffer.resize(props.parameters.maximum_committee_count / 2 + 1);
-         d._total_voting_stake = 0;
+         d._total_transfer_rate = 0;
       }
 
       void operator()(const account_object& stake_account) {
@@ -750,14 +919,19 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
             const auto& stats = stake_account.statistics(d);
             uint64_t voting_stake = stats.total_core_in_orders.value
                   + (stake_account.cashback_vb.valid() ? (*stake_account.cashback_vb)(d).balance.amount.value: 0)
-                  + d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;
+                  + d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;        
+
+            const auto& gpo = d.get_global_properties();
+            auto current_balance = d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;
+
+            uint64_t transfer_rate = stats.importance_score + 0.5 * current_balance;
 
             for( vote_id_type id : opinion_account.options.votes )
             {
                uint32_t offset = id.instance();
                // if they somehow managed to specify an illegal offset, ignore it.
                if( offset < d._vote_tally_buffer.size() )
-                  d._vote_tally_buffer[offset] += voting_stake;
+                  d._vote_tally_buffer[offset] += transfer_rate;
             }
 
             if( opinion_account.options.num_witness <= props.parameters.maximum_witness_count )
@@ -770,7 +944,7 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                // in particular, this takes care of the case where a
                // member was voting for a high number, then the
                // parameter was lowered.
-               d._witness_count_histogram_buffer[offset] += voting_stake;
+               d._witness_count_histogram_buffer[offset] += transfer_rate;
             }
             if( opinion_account.options.num_committee <= props.parameters.maximum_committee_count )
             {
@@ -780,10 +954,10 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                // are turned into votes for maximum_committee_count.
                //
                // same rationale as for witnesses
-               d._committee_count_histogram_buffer[offset] += voting_stake;
+               d._committee_count_histogram_buffer[offset] += transfer_rate;
             }
 
-            d._total_voting_stake += voting_stake;
+            d._total_transfer_rate += transfer_rate;
          }
       }
    } tally_helper(*this, gpo);

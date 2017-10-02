@@ -455,6 +455,10 @@ namespace graphene { namespace chain {
          void update_active_committee_members();
          void update_worker_votes();
 
+         void renew_importance_score(fc::time_point_sec last_maintenance);
+         std::unordered_multimap<object_id_type, object_id_type> construct_transfer_graph(
+                        fc::time_point_sec last_maintenance, std::unordered_map<object_id_type, uint32_t>&);
+
          template<class... Types>
          void perform_account_maintenance(std::tuple<Types...> helpers);
          ///@}
@@ -491,6 +495,8 @@ namespace graphene { namespace chain {
          vector<uint64_t>                  _witness_count_histogram_buffer;
          vector<uint64_t>                  _committee_count_histogram_buffer;
          uint64_t                          _total_voting_stake;
+         //CHANGE
+         uint64_t                          _total_transfer_rate;
 
          flat_map<uint32_t,block_id_type>  _checkpoints;
 

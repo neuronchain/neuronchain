@@ -55,6 +55,13 @@ namespace graphene { namespace chain {
          /** Total operations related to this account that has been removed from the database. */
          uint32_t                            removed_ops = 0;
 
+         /** Overall number of transfer operations (redundant, because the last element of chronology contains it) */
+         //uint64_t                            transfer_rate = 0;
+         /** Time ordered sequence of the transfer operations count */ 
+         //std::map<fc::time_point, uint64_t>  transfers_chronology;
+         std::map<uint32_t, uint64_t>  transfers_chronology;
+         uint64_t importance_score = 0;
+
          /**
           * When calculating votes it is necessary to know how much is stored in orders (and thus unavailable for
           * transfers). Rather than maintaining an index of [asset,owner,order_id] we will simply maintain the running
@@ -89,6 +96,11 @@ namespace graphene { namespace chain {
           * Core fees are paid into the account_statistics_object by this method
           */
          void pay_fee( share_type core_fee, share_type cashback_vesting_threshold );
+
+         /**
+           * This function called for every transfer operation in the system
+           */
+         //void new_transfer(database& d, fc::time_point time = fc::time_point::now());
    };
 
    /**
@@ -390,6 +402,8 @@ FC_REFLECT_DERIVED( graphene::chain::account_statistics_object,
                     (owner)
                     (most_recent_op)
                     (total_ops)(removed_ops)
+                    (transfers_chronology)
+                    (importance_score)
                     (total_core_in_orders)
                     (lifetime_fees_paid)
                     (pending_fees)(pending_vested_fees)
