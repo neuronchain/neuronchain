@@ -159,7 +159,7 @@ void database::pay_workers( share_type& budget )
 void database::update_active_witnesses()
 { try {
    assert( _witness_count_histogram_buffer.size() > 0 );
-   share_type stake_target = (_total_transfer_rate-_witness_count_histogram_buffer[0]) / 2;
+   share_type stake_target = (_total_importance_score-_witness_count_histogram_buffer[0]) / 2;
 
    /// accounts that vote for 0 or 1 witness do not get to express an opinion on
    /// the number of witnesses to have (they abstain and are non-voting accounts)
@@ -244,7 +244,7 @@ void database::update_active_witnesses()
 void database::update_active_committee_members()
 { try {
    assert( _committee_count_histogram_buffer.size() > 0 );
-   share_type stake_target = (_total_transfer_rate-_witness_count_histogram_buffer[0]) / 2;
+   share_type stake_target = (_total_importance_score-_witness_count_histogram_buffer[0]) / 2;
 
    /// accounts that vote for 0 or 1 witness do not get to express an opinion on
    /// the number of witnesses to have (they abstain and are non-voting accounts)
@@ -878,7 +878,7 @@ void database::renew_importance_score(fc::time_point_sec last_maintenance)
          if (it != chrono.end())
             minus = it->second;
 
-         s.importance_score = chrono.rbegin()->second - minus;
+         s.transfer_rate = chrono.rbegin()->second - minus;
       });
    }
 }
@@ -902,7 +902,7 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
          d._vote_tally_buffer.resize(props.next_available_vote_id);
          d._witness_count_histogram_buffer.resize(props.parameters.maximum_witness_count / 2 + 1);
          d._committee_count_histogram_buffer.resize(props.parameters.maximum_committee_count / 2 + 1);
-         d._total_transfer_rate = 0;
+         d._total_importance_score = 0;
       }
 
       void operator()(const account_object& stake_account) {
@@ -923,15 +923,21 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
 
             const auto& gpo = d.get_global_properties();
             auto current_balance = d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;
+            auto balance_multiplier = gpo.parameters.balance_multiplier;
 
-            uint64_t transfer_rate = stats.importance_score + 0.5 * current_balance;
+            uint64_t importance_score = stats.transfer_rate + balance_multiplier * current_balance;
+
+            d.modify(stake_account.statistics(d), [&](account_statistics_object& s)
+            {  
+               s.importance_score = importance_score;
+            });
 
             for( vote_id_type id : opinion_account.options.votes )
             {
                uint32_t offset = id.instance();
                // if they somehow managed to specify an illegal offset, ignore it.
                if( offset < d._vote_tally_buffer.size() )
-                  d._vote_tally_buffer[offset] += transfer_rate;
+                  d._vote_tally_buffer[offset] += importance_score;
             }
 
             if( opinion_account.options.num_witness <= props.parameters.maximum_witness_count )
@@ -944,7 +950,7 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                // in particular, this takes care of the case where a
                // member was voting for a high number, then the
                // parameter was lowered.
-               d._witness_count_histogram_buffer[offset] += transfer_rate;
+               d._witness_count_histogram_buffer[offset] += importance_score;
             }
             if( opinion_account.options.num_committee <= props.parameters.maximum_committee_count )
             {
@@ -954,10 +960,10 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                // are turned into votes for maximum_committee_count.
                //
                // same rationale as for witnesses
-               d._committee_count_histogram_buffer[offset] += transfer_rate;
+               d._committee_count_histogram_buffer[offset] += importance_score;
             }
 
-            d._total_transfer_rate += transfer_rate;
+            d._total_importance_score += importance_score;
          }
       }
    } tally_helper(*this, gpo);

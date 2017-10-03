@@ -72,6 +72,7 @@ namespace graphene { namespace chain {
       extensions_type         extensions;
       uint16_t                importance_score_block_count        = GRAPHENE_IMPORTANCE_SCORE_BLOCK_COUNT; ///< number of blocks that take part in computation of the importance score
       share_type              min_transfer_for_importance         = GRAPHENE_MIN_TRANSFER_FOR_IMPORTANCE;
+      double                  balance_multiplier                  = GRAPHENE_DEFAULT_BALANCE_MULTIPLIER;
 
       /** defined in fee_schedule.cpp */
       void validate()const;
@@ -111,4 +112,5 @@ FC_REFLECT( graphene::chain::chain_parameters,
             (extensions)
             (importance_score_block_count)
             (min_transfer_for_importance)
+            (balance_multiplier)
           )
