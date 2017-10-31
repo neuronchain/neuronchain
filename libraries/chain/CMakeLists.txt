@@ -16,6 +16,7 @@ if( GRAPHENE_DISABLE_UNITY_BUILD )
         db_getter.cpp
         db_init.cpp
         db_maint.cpp
+        db_consensus.cpp
         db_management.cpp
         db_market.cpp
         db_update.cpp

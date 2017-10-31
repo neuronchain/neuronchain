@@ -32,6 +32,7 @@
 
 #include <fc/crypto/digest.hpp>
 
+#include <queue>
 #include <random>
 
 #include "../common/database_fixture.hpp"
@@ -384,4 +385,370 @@ BOOST_AUTO_TEST_CASE( vote_test )
 }
 #endif
 
+
+namespace test {
+      //using transfer_graph_type = std::unordered_multimap<object_id_type, object_id_type>;
+      using transfer_graph_type = std::unordered_multimap<uint64_t, uint64_t>;
+      using node_type = transfer_graph_type::key_type;
+
+std::set<node_type> get_gamma(const transfer_graph_type& transfer_graph, const node_type& base_node) 
+{
+      std::set<node_type> gamma{base_node};
+      size_t bucket_num = transfer_graph.bucket(base_node);
+      auto it = transfer_graph.cbegin(bucket_num);
+      for (; it != transfer_graph.cend(bucket_num); ++it)
+            gamma.insert(it->second);
+      return gamma;
+};
+
+fc::optional<std::unordered_set<node_type>> get_core(const transfer_graph_type& transfer_graph, node_type node, 
+                                                      double epsilon, uint32_t mu) 
+{
+      //size_t bucket_num = transfer_graph.bucket(node);
+      //auto it = transfer_graph.cbegin(bucket_num);
+    
+      //if (transfer_graph.bucket_size(bucket_num) < mu)
+      //      return {};
+
+      std::set<node_type> first = get_gamma(transfer_graph, node);
+      if (first.size() < mu)
+            return {};
+
+      std::unordered_set<node_type> core;
+      auto it = first.cbegin();
+      //for (; it != transfer_graph.cend(bucket_num); ++it) {
+      for (; it != first.cend(); ++it) {
+            std::set<node_type> second = get_gamma(transfer_graph, *it);
+            std::set<node_type> intersection;
+            std::set_intersection(first.cbegin(), first.cend(), second.cbegin(), second.cend(), 
+                        std::inserter(intersection, intersection.begin()));
+            double similarity = intersection.size() / std::sqrt(first.size() * second.size());
+
+            std::cerr << node << " <-> " << *it << " : " << 
+                  intersection.size() << " / √(" << first.size() << " * " << second.size() << ") = " <<
+                  similarity << std::endl;
+
+            if (similarity >= epsilon)
+                  core.insert(*it);
+      }
+      if (core.size() >= mu) return core;
+      return {};
+      //return (sum > mu) ? core : {};
+};
+
+std::unordered_map<node_type, uint32_t> cluster_graph_simple(const transfer_graph_type& transfer_graph, double epsilon, uint32_t mu)
+{
+      std::unordered_map<node_type, uint32_t> node_ids;
+      const uint32_t non_member_id = 0;
+      const uint32_t outlier_id = 1;
+      const uint32_t hub_id = 2;
+      uint32_t last_cluster = 2;
+
+      auto skip_same = [](transfer_graph_type::const_iterator it, transfer_graph_type::const_iterator end) {
+            transfer_graph_type::const_iterator last = it++;
+            for(; it != end && it->first == last->first; last = it++);
+            return it;
+      };
+
+      auto it = transfer_graph.begin();
+      for(; it != transfer_graph.end(); it = skip_same(it, transfer_graph.end())) {
+            //std::cerr << it->first.instance() << " ";
+            const auto& node = it->first;
+            if (node_ids.find(node) != node_ids.end())
+                  continue;
+
+            std::queue<node_type> queue;
+            auto core_optional = get_core(transfer_graph, node, epsilon, mu);
+            if (core_optional.valid()) {
+                  last_cluster++;
+                  node_ids[node] = last_cluster;
+                  for (const auto& neighbour : *core_optional) {
+                        /*auto neighbour_id = node_ids.find(neighbour);
+                        if (neighbour_id == node_ids.end()) {
+                              node_ids[neighbour] = last_cluster;
+                        }*/
+                        queue.push(neighbour);
+                  }
+                  while(!queue.empty()) {
+                        auto front = queue.front();
+                        queue.pop();
+                        auto front_core_optional = get_core(transfer_graph, front, epsilon, mu);
+                        if (front_core_optional.valid()) {
+                              for (const auto& reachable_node : *front_core_optional) {
+                                    auto reachable_id = node_ids.find(reachable_node);
+                                    if (reachable_id == node_ids.end()) {
+                                          node_ids[reachable_node] = last_cluster;
+                                          queue.push(reachable_node);
+                                    }
+                                    else if (reachable_id->second == non_member_id)
+                                          reachable_id->second = last_cluster;
+                              }
+                        }                        
+                  }
+            }
+            else {
+                  node_ids[node] = non_member_id;
+            }
+      } 
+      std::cerr << "!\n";
+      for (auto& id : node_ids) {
+      //it = transfer_graph.begin();
+      //for(; it != transfer_graph.end(); it = skip_same(it, transfer_graph.end())) {
+            //std::cerr << id.first.instance() << ' ';
+            //auto id = std::make_pair(it->first, node_ids.at(it->first));
+            if (id.second == non_member_id) {
+                  auto gamma = get_gamma(transfer_graph, id.first);
+                  /*bool is_hub = std::inner_product(gamma.begin(), gamma.end(), gamma.begin(), false, std::logical_or<bool>{}, 
+                        [&](const decltype(*gamma.begin())& lhs, const decltype(*gamma.begin())& rhs) {
+                              return node_ids.at(lhs) != node_ids.at(rhs);
+                  });*/
+                  bool is_hub = false;
+                  auto g_it1 = gamma.cbegin();
+                  auto g_end = gamma.cend();
+                  std::cerr << id.first << " -> " << std::flush;
+                  for (const auto& gnode : gamma)
+                        std::cerr << gnode << ' ' << std::flush;
+                  for (; g_it1 != g_end && !is_hub; ++g_it1) {
+                        for (auto g_it2 = std::next(g_it1); g_it2 != g_end && !is_hub; ++g_it2) {
+                              auto id1 = node_ids.at(*g_it1);
+                              auto id2 = node_ids.at(*g_it2);
+                              if (id1 > hub_id && id2 > hub_id && id1 != id2)
+                                    is_hub = true;
+                        }
+                  }
+                  std::cerr << "!\n";
+                  id.second = is_hub ? hub_id : outlier_id;
+            }
+      }
+      std::cerr << "!\n";
+      return node_ids;
+}
+}
+
+
+BOOST_AUTO_TEST_CASE( scan_test )
+{
+      try {
+            using transfer_graph_type = std::unordered_multimap<uint64_t, uint64_t>;
+            
+            {
+                  std::vector<std::vector<uint32_t>> edges{
+                        {1,4,5,6},        //0
+                        {0,2,5},          //1
+                        {1,3,5},          //2
+                        {2,4,5,6},        //3
+                        {0,3,5,6},        //4
+                        {0,1,2,3,4},      //5
+                        {0,3,4,7,10,11},  //6
+                        {6,8,11,12},      //7
+                        {7,9,12},         //8
+                        {8,10,12,13},     //9
+                        {6,9,11,12},      //10
+                        {6,7,10,12},      //11
+                        {7,8,9,10,11},    //12
+                        {9}               //13
+                  };
+
+                  std::vector<uint64_t> accounts(edges.size());
+                  std::iota(accounts.begin(), accounts.end(), 0);
+                  /*for(size_t i = 0; i < edges.size(); ++i)
+                        accounts.emplace_back(account_id_type(i));*/
+
+                  //transfer_graph_type test_graph;
+                  boost::numeric::ublas::matrix<double> outlink(edges.size(), edges.size(), 0);
+                  double outlink_value = db.get_global_properties().parameters.min_transfer_for_clustering.value + 2;
+                  for(size_t i = 0; i < edges.size(); ++i) {
+                        auto& edges_row = edges[i];
+                        for (auto vertex : edges_row)
+                              outlink(accounts[i], accounts[vertex]) = outlink_value;
+                              //test_graph.emplace(accounts[i], accounts[vertex]);
+                  }
+
+                  /*auto it = test_graph.begin();
+                  for (; it != test_graph.end(); ++it)
+                        std::cerr << it->first << " -> " << it->second << std::endl;
+                  std::cerr << '\n';*/
+
+                  auto min_transfer = db.get_global_properties().parameters.min_transfer_for_clustering.value;
+                  auto clusters = graphene::chain::detail::cluster_graph_simple(outlink, 0.7, 3, min_transfer);
+                  //auto clusters = test::cluster_graph_simple(test_graph, 0.7, 3);
+            
+                  for (const auto& p : clusters)
+                        std::cerr << p.first << " -> " << p.second << std::endl;
+
+                  std::vector<uint32_t> cluster1{0,1,2,3,4,5};
+                  std::vector<uint32_t> cluster2{7,8,9,10,11,12};
+
+                  for (auto k : cluster1)
+                        BOOST_CHECK(clusters[accounts[cluster1[0]]] == clusters[accounts[k]]);
+                  for (auto k : cluster2)
+                        BOOST_CHECK(clusters[accounts[cluster2[0]]] == clusters[accounts[k]]);
+                  BOOST_CHECK(clusters[accounts[cluster1[0]]] != clusters[accounts[cluster2[0]]]);
+
+                  BOOST_CHECK(clusters[accounts[6]] == 2);  //hub
+                  BOOST_CHECK(clusters[accounts[13]] == 1); //outlier     
+            }
+
+            {
+                  std::vector<std::vector<uint32_t>> edges{
+                        {8},                    //0
+                        {2,4,6,8},              //1
+                        {1,4,6,7,8,13},         //2
+                        {4,7,8,13,14},          //3
+                        {1,2,3,5,6,7,8,13,14,15},//4
+                        {4,15,16},              //5
+                        {1,2,4,7,13,14,15},       //6
+                        {2,3,4,6,8,15},         //7
+                        {0,1,2,3,4,7},          //8
+                        {10,11,12},             //9
+                        {9,11,12,16},           //10
+                        {9,10,12,16},           //11
+                        {9,10,11},              //12
+                        {2,3,4,6,14},           //13
+                        {3,4,6,13},             //14
+                        {4,5,6,7},              //15
+                        {5,10,11}               //16
+                  };
+                  /*std::vector<std::vector<uint32_t>> edges{
+                        {8},                    //0
+                        {2,4,6,8},              //1
+                        {4,6,7,8,13},         //2
+                        {4,7,8,13,14},          //3
+                        {5,6,7,13,14,15},     //4
+                        {15,16},              //5
+                        {7,13,14,15},       //6
+                        {8,15},         //7
+                        {},          //8
+                        {10,11,12},             //9
+                        {11,12},              //10
+                        {12},              //11
+                        {},              //12
+                        {14},           //13
+                        {},             //14
+                        {},              //15
+                        {}               //16
+                  };*/
+
+                  std::vector<uint64_t> accounts(edges.size());
+                  std::iota(accounts.begin(), accounts.end(), 0);
+                  /*for(size_t i = 0; i < edges.size(); ++i)
+                        accounts.emplace_back(account_id_type(i));*/
+
+                  //transfer_graph_type test_graph;
+                  boost::numeric::ublas::matrix<double> outlink(edges.size(), edges.size(), 0);
+                  auto outlink_value = db.get_global_properties().parameters.min_transfer_for_clustering.value + 1;
+                  for(size_t i = 0; i < edges.size(); ++i) {
+                        auto& edges_row = edges[i];
+                        for (auto vertex : edges_row) {
+                              /*outlink(accounts[i], accounts[vertex]) = outlink_value;
+                              test_graph.emplace(accounts[i], accounts[vertex]);*/
+                              outlink(i, vertex) = outlink_value;
+                              //test_graph.emplace(i, vertex);
+                        }
+                  }
+
+                  /*std::cerr << '\n';
+                  auto it = test_graph.begin();
+                  for (; it != test_graph.end(); ++it)
+                        std::cerr << it->first << " -> " << it->second << std::endl;
+                  std::cerr << '\n';*/
+
+                  auto min_transfer = db.get_global_properties().parameters.min_transfer_for_clustering.value;
+                  auto clusters = graphene::chain::detail::cluster_graph_simple(outlink, 0.671, 2, min_transfer);
+                  //auto clusters2 = test::cluster_graph_simple(test_graph, 0.671, 2);
+            
+                  for (const auto& p : clusters)
+                        std::cerr << p.first << " -> " << p.second << std::endl;
+
+                  std::vector<uint32_t> cluster1{1,2,3,4,6,7,8,13,14,15};
+                  std::vector<uint32_t> cluster2{9,10,11,12};
+
+                  for (auto k : cluster1)
+                        BOOST_CHECK(clusters[accounts[cluster1[0]]] == clusters[accounts[k]]);
+                  for (auto k : cluster2)
+                        BOOST_CHECK(clusters[accounts[cluster2[0]]] == clusters[accounts[k]]);
+                  BOOST_CHECK(clusters[accounts[cluster1[0]]] != clusters[accounts[cluster2[0]]]);
+
+                  BOOST_CHECK(clusters[accounts[5]] != clusters[accounts[cluster1[0]]]);
+                  //BOOST_CHECK(clusters[accounts[5]] != clusters[accounts[16]]);
+
+                  BOOST_CHECK(clusters[accounts[16]] != clusters[accounts[cluster2[0]]]);
+
+                  BOOST_CHECK(clusters[accounts[0]] == 1); //outlier
+            }
+       
+
+      } FC_LOG_AND_RETHROW()
+}
+
+
+BOOST_AUTO_TEST_CASE( rank_test )
+{
+      try {
+            {
+                  std::vector<std::vector<uint32_t>> edges{
+                        {1},                    //0
+                        {2},                    //1
+                        {0,3,6},                //2
+                        {4},                    //3
+                        {5},                    //4
+                        {3},                    //5
+                        {},                     //6
+                  };
+
+                  std::vector<uint64_t> accounts(edges.size());
+                  std::iota(accounts.begin(), accounts.end(), 0);
+                  /*for(size_t i = 0; i < edges.size(); ++i)
+                        accounts.emplace_back(account_id_type(i));*/
+
+                  //transfer_graph_type test_graph;
+                  boost::numeric::ublas::matrix<double> outlink(edges.size(), edges.size());
+                  auto outlink_value = db.get_global_properties().parameters.min_transfer_for_clustering.value + 1;
+                  for(size_t i = 0; i < edges.size(); ++i) {
+                        auto& edges_row = edges[i];
+                        for (auto vertex : edges_row)
+                              outlink(accounts[i], accounts[vertex]) = outlink_value;
+                              //test_graph.emplace(accounts[i], accounts[vertex]);
+                  }
+
+                  /*auto it = test_graph.begin();
+                  for (; it != test_graph.end(); ++it)
+                        std::cerr << it->first.instance() << " -> " << it->second.instance() << std::endl;
+                  std::cerr << '\n';*/
+
+                  auto min_transfer = db.get_global_properties().parameters.min_transfer_for_clustering.value;
+                  double mu = db.get_global_properties().parameters.clustering_mu;
+                  double epsilon = db.get_global_properties().parameters.clustering_epsilon;
+                  auto clusters = graphene::chain::detail::cluster_graph_simple(outlink, 0.7, 2, min_transfer);
+
+                  double r_mu = db.get_global_properties().parameters.rank_mu;
+                  double r_etha = db.get_global_properties().parameters.rank_etha;
+                  double r_epsilon = db.get_global_properties().parameters.rank_epsilon;
+
+                  //graphene::chain::detail::getNCDAwareRank(outlink, clusters, r_etha, r_mu, r_epsilon);
+                  //auto clusters = test::cluster_graph_simple(test_graph, 0.7, 2);
+            
+                  for (const auto& p : clusters)
+                        std::cerr << p.first << " -> " << p.second << std::endl;
+
+                  std::vector<uint32_t> cluster1{0,1,2};
+                  std::vector<uint32_t> cluster2{3,4,5};
+
+                  for (auto k : cluster1)
+                        BOOST_CHECK(clusters[accounts[cluster1[0]]] == clusters[accounts[k]]);
+                  for (auto k : cluster2)
+                        BOOST_CHECK(clusters[accounts[cluster2[0]]] == clusters[accounts[k]]);
+                  BOOST_CHECK(clusters[accounts[cluster1[0]]] != clusters[accounts[cluster2[0]]]);
+
+                  BOOST_CHECK(clusters[accounts[5]] != clusters[accounts[cluster1[0]]]);
+                  //BOOST_CHECK(clusters[accounts[5]] != clusters[accounts[16]]);
+
+                  BOOST_CHECK(clusters[accounts[16]] != clusters[accounts[cluster2[0]]]);
+
+                  BOOST_CHECK(clusters[accounts[0]] == 1); //outlier
+            }
+
+
+      } FC_LOG_AND_RETHROW()
+}
 BOOST_AUTO_TEST_SUITE_END()   

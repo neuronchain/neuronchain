@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include <queue>
 
 #include <boost/multiprecision/integer.hpp>
 
@@ -717,10 +718,10 @@ void deprecate_annual_members( database& db )
 }
 
 
+using transfer_graph_type2 = std::unordered_multimap<object_id_type, object_id_type>;
+using node_type2 = transfer_graph_type2::key_type;
 
-using transfer_graph_type = std::unordered_multimap<object_id_type, object_id_type>;
-
-uint32_t rec_cycle_search(const transfer_graph_type& transfer_graph, object_id_type current, object_id_type cycle_target, 
+uint32_t rec_cycle_search(const transfer_graph_type2& transfer_graph, object_id_type current, object_id_type cycle_target, 
                               uint16_t length, std::unordered_set<object_id_type> visited = std::unordered_set<object_id_type>{})
 {
   if (current == cycle_target) return 1;
@@ -738,6 +739,195 @@ uint32_t rec_cycle_search(const transfer_graph_type& transfer_graph, object_id_t
 
   return sum;
 }
+
+
+#if 0        
+      using transfer_graph_type = std::unordered_multimap<uint64_t, uint64_t>;
+      using node_type = transfer_graph_type::key_type;
+
+std::set<node_type> get_gamma(const transfer_graph_type& transfer_graph, const node_type& base_node) 
+{
+      std::set<node_type> gamma{base_node};
+      size_t bucket_num = transfer_graph.bucket(base_node);
+      auto it = transfer_graph.cbegin(bucket_num);
+      for (; it != transfer_graph.cend(bucket_num); ++it)
+            gamma.insert(it->second);
+      return gamma;
+};
+
+fc::optional<std::unordered_set<node_type>> get_core(const transfer_graph_type& transfer_graph, node_type node, 
+                                                      double epsilon, uint32_t mu) 
+{
+      //size_t bucket_num = transfer_graph.bucket(node);
+      //auto it = transfer_graph.cbegin(bucket_num);
+    
+      //if (transfer_graph.bucket_size(bucket_num) < mu)
+      //      return {};
+
+      std::set<node_type> first = get_gamma(transfer_graph, node);
+      if (first.size() < mu)
+            return {};
+
+      std::unordered_set<node_type> core;
+      auto it = first.cbegin();
+      //for (; it != transfer_graph.cend(bucket_num); ++it) {
+      for (; it != first.cend(); ++it) {
+            std::set<node_type> second = get_gamma(transfer_graph, *it);
+            std::set<node_type> intersection;
+            std::set_intersection(first.cbegin(), first.cend(), second.cbegin(), second.cend(), 
+                        std::inserter(intersection, intersection.begin()));
+            double similarity = intersection.size() / std::sqrt(first.size() * second.size());
+
+            std::cerr << node << " <-> " << *it << " : " << 
+                  intersection.size() << " / √(" << first.size() << " * " << second.size() << ") = " <<
+                  similarity << std::endl;
+
+            if (similarity >= epsilon)
+                  core.insert(*it);
+      }
+      if (core.size() >= mu) return core;
+      return {};
+      //return (sum > mu) ? core : {};
+};
+
+std::unordered_map<node_type, uint32_t> cluster_graph_simple(const transfer_graph_type& transfer_graph, double epsilon, uint32_t mu)
+{
+      std::unordered_map<node_type, uint32_t> node_ids;
+      const uint32_t non_member_id = 0;
+      const uint32_t outlier_id = 1;
+      const uint32_t hub_id = 2;
+      uint32_t last_cluster = 2;
+
+      auto skip_same = [](transfer_graph_type::const_iterator it, transfer_graph_type::const_iterator end) {
+            transfer_graph_type::const_iterator last = it++;
+            for(; it != end && it->first == last->first; last = it++);
+            return it;
+      };
+
+      auto it = transfer_graph.begin();
+      for(; it != transfer_graph.end(); it = skip_same(it, transfer_graph.end())) {
+            //std::cerr << it->first.instance() << " ";
+            const auto& node = it->first;
+            if (node_ids.find(node) != node_ids.end())
+                  continue;
+
+            std::queue<node_type> queue;
+            auto core_optional = get_core(transfer_graph, node, epsilon, mu);
+            if (core_optional.valid()) {
+                  last_cluster++;
+                  node_ids[node] = last_cluster;
+                  for (const auto& neighbour : *core_optional) {
+                        /*auto neighbour_id = node_ids.find(neighbour);
+                        if (neighbour_id == node_ids.end()) {
+                              node_ids[neighbour] = last_cluster;
+                        }*/
+                        queue.push(neighbour);
+                  }
+                  while(!queue.empty()) {
+                        auto front = queue.front();
+                        queue.pop();
+                        auto front_core_optional = get_core(transfer_graph, front, epsilon, mu);
+                        if (front_core_optional.valid()) {
+                              for (const auto& reachable_node : *front_core_optional) {
+                                    auto reachable_id = node_ids.find(reachable_node);
+                                    if (reachable_id == node_ids.end()) {
+                                          node_ids[reachable_node] = last_cluster;
+                                          queue.push(reachable_node);
+                                    }
+                                    else if (reachable_id->second == non_member_id)
+                                          reachable_id->second = last_cluster;
+                              }
+                        }                        
+                  }
+            }
+            else {
+                  node_ids[node] = non_member_id;
+            }
+      } 
+      std::cerr << "!\n";
+      for (auto& id : node_ids) {
+      //it = transfer_graph.begin();
+      //for(; it != transfer_graph.end(); it = skip_same(it, transfer_graph.end())) {
+            //std::cerr << id.first.instance() << ' ';
+            //auto id = std::make_pair(it->first, node_ids.at(it->first));
+            if (id.second == non_member_id) {
+                  auto gamma = get_gamma(transfer_graph, id.first);
+                  /*bool is_hub = std::inner_product(gamma.begin(), gamma.end(), gamma.begin(), false, std::logical_or<bool>{}, 
+                        [&](const decltype(*gamma.begin())& lhs, const decltype(*gamma.begin())& rhs) {
+                              return node_ids.at(lhs) != node_ids.at(rhs);
+                  });*/
+                  bool is_hub = false;
+                  auto g_it1 = gamma.cbegin();
+                  auto g_end = gamma.cend();
+                  std::cerr << id.first << " -> " << std::flush;
+                  for (const auto& gnode : gamma)
+                        std::cerr << gnode << ' ' << std::flush;
+                  for (; g_it1 != g_end && !is_hub; ++g_it1) {
+                        for (auto g_it2 = std::next(g_it1); g_it2 != g_end && !is_hub; ++g_it2) {
+                              auto id1 = node_ids.at(*g_it1);
+                              auto id2 = node_ids.at(*g_it2);
+                              if (id1 > hub_id && id2 > hub_id && id1 != id2)
+                                    is_hub = true;
+                        }
+                  }
+                  std::cerr << "!\n";
+                  id.second = is_hub ? hub_id : outlier_id;
+            }
+      }
+      std::cerr << "!\n";
+      return node_ids;
+}
+
+/*return type*/void cluster_graph(const transfer_graph_type& transfer_graph, double epsilon = 0.3, uint32_t mu = 4)
+{
+      std::unordered_map<node_type, std::unordered_set<uint32_t>> node_ids;
+      const uint32_t outlier_id = 0;
+      const uint32_t hub_id = 1;
+      uint32_t last_cluster = 1;
+
+      const auto compareFirst = [](const transfer_graph_type::value_type& lhs, const transfer_graph_type::value_type& rhs) {
+            return lhs.first < rhs.first;
+      };
+
+      auto process_core = [&](node_type core_node) {
+            auto core_optional = get_core(transfer_graph, core_node, epsilon, mu);
+            if (core_optional.valid()) {
+                  last_cluster++;
+                  for (const auto& neighbour : *core_optional)
+                        node_ids[core_node].insert(last_cluster);
+            }
+            else {
+                  node_ids.emplace(core_node, outlier_id);
+            }
+      };
+
+      auto it = transfer_graph.begin();
+      for(; it != transfer_graph.end(); it = /*CHANGE IT !!!*/std::upper_bound(it, transfer_graph.end(), *it, compareFirst)) {
+            const auto& node = it->first;
+            if (node_ids.find(node) != node_ids.end())
+                  continue;
+
+            std::unordered_set<node_type> passed{node};
+            process_core(node);   
+            std::unordered_set<node_type> two_hops_union;         
+            do {                  
+                  for (const auto& passed_node : passed) {
+                        size_t bucket_num = transfer_graph.bucket(passed_node);
+                        auto it = transfer_graph.cbegin(bucket_num);
+                        auto two_hops_gamma = get_gamma(transfer_graph, it->second);
+                        two_hops_union.insert(two_hops_gamma.begin(), two_hops_gamma.end());
+                  }
+                  for (const auto& passed_node : passed)
+                        two_hops_union.erase(passed_node);
+                  for (const auto& th_node : two_hops_union)
+                        process_core(th_node);
+                  passed.insert(two_hops_union.begin(), two_hops_union.end());
+            } while(!two_hops_union.empty());
+      } 
+      /*manage multiple cores*/
+      /*manage hubs*/
+} 
+#endif
 
 struct get_transfer_accounts_visitor
 {
@@ -768,7 +958,8 @@ struct get_transfer_accounts_visitor
    }
  };
 
-transfer_graph_type database::construct_transfer_graph(fc::time_point_sec last_maintenance, std::unordered_map<object_id_type, uint32_t>& account_transfers)
+
+ transfer_graph_type2 database::construct_transfer_graph(fc::time_point_sec last_maintenance, std::unordered_map<object_id_type, uint32_t>& account_transfers)
 {
    /*auto transaction_expiration = get_global_properties().parameters.maximum_time_until_expiration;
    if (last_maintenance > head_block_time() - transaction_expiration) {
@@ -797,7 +988,7 @@ transfer_graph_type database::construct_transfer_graph(fc::time_point_sec last_m
    }*/
 
    auto optional_block = fetch_block_by_id(head_block_id());
-   transfer_graph_type transfer_graph;
+   transfer_graph_type2 transfer_graph;
    size_t blocks = 0;
    auto max_blocks = get_global_properties().parameters.importance_score_block_count;
    asset min_transfer_amount = get_global_properties().parameters.min_transfer_for_importance;

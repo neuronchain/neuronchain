@@ -23,8 +23,11 @@
  */
 #pragma once
 
-#define GRAPHENE_SYMBOL "BTS"
-#define GRAPHENE_ADDRESS_PREFIX "BTS"
+//#define GRAPHENE_SYMBOL "BTS"
+//#define GRAPHENE_ADDRESS_PREFIX "BTS"
+
+#define GRAPHENE_SYMBOL "NRN"
+#define GRAPHENE_ADDRESS_PREFIX "NRN"
 
 #define GRAPHENE_MIN_ACCOUNT_NAME_LENGTH 1
 #define GRAPHENE_MAX_ACCOUNT_NAME_LENGTH 63
@@ -171,6 +174,13 @@
 #define GRAPHENE_FBA_STEALTH_DESIGNATED_ASSET (asset_id_type(743))
 
 
-#define GRAPHENE_IMPORTANCE_SCORE_BLOCK_COUNT                43200
+#define GRAPHENE_IMPORTANCE_SCORE_BLOCK_COUNT                 864000
 #define GRAPHENE_MIN_TRANSFER_FOR_IMPORTANCE                  1000
+#define GRAPHENE_MIN_BALANCE_FOR_IMPORTANCE                   10000
 #define GRAPHENE_DEFAULT_BALANCE_MULTIPLIER                   0.5
+#define GRAPHENE_CLUSTERING_MU                                4
+#define GRAPHENE_CLUSTERING_EPSILON                           0.3
+#define GRAPHENE_MIN_TRANSFER_FOR_CLUSTERING                  1000
+#define GRAPHENE_RANK_MU                                      0.1
+#define GRAPHENE_RANK_ETHA                                    0.7
+#define GRAPHENE_RANK_EPSILON                                 0.1

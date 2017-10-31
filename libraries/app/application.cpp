@@ -161,7 +161,7 @@ namespace detail {
          else
          {
             // https://bitsharestalk.org/index.php/topic,23715.0.html
-            vector<string> seeds = {
+            /*vector<string> seeds = {
                "104.236.144.84:1777",               // puppies      (USA)
                "128.199.143.47:2015",               // Harvey       (Singapore)
                "23.92.53.182:1776",                 // sahkan       (USA)
@@ -179,6 +179,9 @@ namespace detail {
                "seed06.bts-nodes.net:1776",	        // Thom         (USA)
                "seed07.bts-nodes.net:1776",	        // Thom         (Singapore)
                "seeds.bitshares.eu:1776"            // pc           (http://seeds.quisquis.de/bitshares.html)
+            };  */
+            vector<string> seeds = {
+               "89.223.30.12:1777"
             };
             for( const string& endpoint_string : seeds )
             {

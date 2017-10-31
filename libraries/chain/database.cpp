@@ -28,6 +28,7 @@
 #include "db_getter.cpp"
 #include "db_init.cpp"
 #include "db_maint.cpp"
+#include "db_consensus.cpp"
 #include "db_management.cpp"
 #include "db_market.cpp"
 #include "db_update.cpp"
