@@ -77,7 +77,7 @@ namespace bpo = boost::program_options;
 namespace detail {
 
    genesis_state_type create_example_genesis() {
-      auto nathan_key = fc::ecc::private_key::regenerate(fc::sha256::hash(string("nathan")));
+      auto nathan_key = fc::ecc::private_key::regenerate(fc::sha256::hash(string("faucet_account")));
       dlog("Allocating all stake to ${key}", ("key", utilities::key_to_wif(nathan_key)));
       genesis_state_type initial_state;
       initial_state.initial_parameters.current_fees = fee_schedule::get_default();//->set_all_fees(GRAPHENE_BLOCKCHAIN_PRECISION);
@@ -96,7 +96,7 @@ namespace detail {
          initial_state.initial_witness_candidates.push_back({name, nathan_key.get_public_key()});
       }
 
-      initial_state.initial_accounts.emplace_back("nathan", nathan_key.get_public_key());
+      initial_state.initial_accounts.emplace_back("faucet", nathan_key.get_public_key());
       initial_state.initial_balances.push_back({nathan_key.get_public_key(),
                                                 GRAPHENE_SYMBOL,
                                                 GRAPHENE_MAX_SHARE_SUPPLY});
