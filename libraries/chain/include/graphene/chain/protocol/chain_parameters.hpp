@@ -80,6 +80,10 @@ namespace graphene { namespace chain {
       double                  rank_mu                             = GRAPHENE_RANK_MU;
       double                  rank_etha                           = GRAPHENE_RANK_ETHA;
       double                  rank_epsilon                        = GRAPHENE_RANK_EPSILON;
+      double                  structure_cluster_weight            = GRAPHENE_IMPORTANCE_CLUSTER_WEIGHT;
+      double                  structure_outlier_weight            = GRAPHENE_IMPORTANCE_OUTLIER_WEIGHT;
+      double                  importance_omega_o                  = GRAPHENE_IMPORTANCE_OMEGA_O;
+      double                  importance_omega_i                  = GRAPHENE_IMPORTANCE_OMEGA_I;
 
       /** defined in fee_schedule.cpp */
       void validate()const;
@@ -126,4 +130,8 @@ FC_REFLECT( graphene::chain::chain_parameters,
             (rank_mu)
             (rank_etha)
             (rank_epsilon)
+            (structure_cluster_weight)
+            (structure_outlier_weight)
+            (importance_omega_o)
+            (importance_omega_o)
           )

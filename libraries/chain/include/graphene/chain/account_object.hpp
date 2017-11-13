@@ -56,14 +56,14 @@ namespace graphene { namespace chain {
          uint32_t                            removed_ops = 0;
 
          /** Number of outbound transfers (corrected for cycles) from the last maintenance. */
-         uint64_t transfer_rate = 0;
+         //uint64_t transfer_rate = 0;
          /** 
           * Importance score (calculated each maintenance).
           * importance_score = transfer_rate + balance_multiplier * account_balance
           */
-         uint64_t importance_score = 0;
+         double importance_score = 0;
          /** Sequence of the transfer operations count, ordered by block number */
-         std::map<uint32_t, uint64_t>  transfers_chronology;
+         //std::map<uint32_t, uint64_t>  transfers_chronology;
 
          /**
           * When calculating votes it is necessary to know how much is stored in orders (and thus unavailable for
@@ -405,9 +405,7 @@ FC_REFLECT_DERIVED( graphene::chain::account_statistics_object,
                     (owner)
                     (most_recent_op)
                     (total_ops)(removed_ops)                    
-                    (transfer_rate)
                     (importance_score)
-                    (transfers_chronology)
                     (total_core_in_orders)
                     (lifetime_fees_paid)
                     (pending_fees)(pending_vested_fees)

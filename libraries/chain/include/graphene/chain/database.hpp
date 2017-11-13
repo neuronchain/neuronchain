@@ -461,8 +461,10 @@ namespace graphene { namespace chain {
          void renew_importance_score(fc::time_point_sec last_maintenance);
          std::unordered_multimap<object_id_type, object_id_type> construct_transfer_graph(
                         fc::time_point_sec last_maintenance, std::unordered_map<object_id_type, uint32_t>&);
-         boost::numeric::ublas::matrix<double> construct_outlink_matrix(fc::time_point_sec last_maintenance);
-
+         //boost::numeric::ublas::matrix<double> construct_outlink_matrix(fc::time_point_sec last_maintenance);
+         boost::numeric::ublas::matrix<double> construct_outlink_matrix(fc::time_point_sec last_maintenance, std::unordered_map<uint64_t, uint64_t>& accounts_map);
+         void calculate_importance_score(fc::time_point_sec last_maintenance);
+         
          template<class... Types>
          void perform_account_maintenance(std::tuple<Types...> helpers);
          ///@}
@@ -526,7 +528,7 @@ namespace graphene { namespace chain {
        }
 
        
-       std::unordered_map<uint64_t, uint32_t> cluster_graph_simple(const boost::numeric::ublas::matrix<double>& outlink_matrix, double epsilon, uint32_t mu, share_type min_clustering_transfer);
+       std::unordered_map<uint64_t, uint32_t> cluster_graph_simple(const boost::numeric::ublas::matrix<double>& outlink_matrix, const std::unordered_map<uint64_t, uint64_t>& accounts_map, double epsilon, uint32_t mu, share_type min_clustering_transfer);
        boost::numeric::ublas::vector<double> getNCDAwareRank(const boost::numeric::ublas::matrix<double>& outlink_matrix, const std::unordered_map<uint64_t, uint32_t>& clusters, double etha, double mu, double epsilon);
    }
 

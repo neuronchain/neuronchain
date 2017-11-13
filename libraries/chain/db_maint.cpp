@@ -1023,6 +1023,7 @@ struct get_transfer_accounts_visitor
    return transfer_graph;
 }
 
+#if 0
 void database::renew_importance_score(fc::time_point_sec last_maintenance)
 {
    std::unordered_map<object_id_type, uint32_t> account_transfers;
@@ -1073,12 +1074,14 @@ void database::renew_importance_score(fc::time_point_sec last_maintenance)
       });
    }
 }
+#endif
 
 void database::perform_chain_maintenance(const signed_block& next_block, const global_property_object& global_props)
 {
    const auto& gpo = get_global_properties();
 
-   renew_importance_score(next_block.timestamp - gpo.parameters.maintenance_interval);
+   //renew_importance_score(next_block.timestamp - gpo.parameters.maintenance_interval);
+   calculate_importance_score(next_block.timestamp - gpo.parameters.maintenance_interval);
 
    distribute_fba_balances(*this);
    create_buyback_orders(*this);
@@ -1108,20 +1111,22 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
                                      : d.get(stake_account.options.voting_account);
 
             const auto& stats = stake_account.statistics(d);
-            uint64_t voting_stake = stats.total_core_in_orders.value
+            /*uint64_t voting_stake = stats.total_core_in_orders.value
                   + (stake_account.cashback_vb.valid() ? (*stake_account.cashback_vb)(d).balance.amount.value: 0)
-                  + d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;        
+                  + d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;  */      
 
             const auto& gpo = d.get_global_properties();
-            auto current_balance = d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;
-            auto balance_multiplier = gpo.parameters.balance_multiplier;
+            //auto current_balance = d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;
+            //auto balance_multiplier = gpo.parameters.balance_multiplier;
 
-            uint64_t importance_score = stats.transfer_rate + balance_multiplier * current_balance;
+            //uint64_t importance_score = stats.transfer_rate + balance_multiplier * current_balance;
 
-            d.modify(stake_account.statistics(d), [&](account_statistics_object& s)
+            /*d.modify(stake_account.statistics(d), [&](account_statistics_object& s)
             {  
                s.importance_score = importance_score;
-            });
+            });*/
+
+            uint64_t importance_score = stats.importance_score * 1e6;
 
             for( vote_id_type id : opinion_account.options.votes )
             {

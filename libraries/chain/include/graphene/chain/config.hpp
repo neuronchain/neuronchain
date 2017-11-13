@@ -184,3 +184,7 @@
 #define GRAPHENE_RANK_MU                                      0.1
 #define GRAPHENE_RANK_ETHA                                    0.7
 #define GRAPHENE_RANK_EPSILON                                 0.1
+#define GRAPHENE_IMPORTANCE_CLUSTER_WEIGHT                    1.0
+#define GRAPHENE_IMPORTANCE_OUTLIER_WEIGHT                    0.9
+#define GRAPHENE_IMPORTANCE_OMEGA_O                           1.25
+#define GRAPHENE_IMPORTANCE_OMEGA_I                           0.1337
