@@ -133,5 +133,5 @@ FC_REFLECT( graphene::chain::chain_parameters,
             (structure_cluster_weight)
             (structure_outlier_weight)
             (importance_omega_o)
-            (importance_omega_o)
+            (importance_omega_i)
           )
