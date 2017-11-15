@@ -57,11 +57,11 @@ BOOST_AUTO_TEST_CASE( trs_benchmark )
    fc::ecc::private_key nathan_key = fc::ecc::private_key::generate();
    //const auto& key = register_key(nathan_key.get_public_key());
    private_key_type sam_key = generate_private_key("sam");
-   const auto& committee_account = account_id_type()(db);
-   auto start = fc::time_point::now();
+   const auto& committee_account = account_id_type()(db);   
    std::vector<account_object> accs;
    for( uint32_t i = 0; i < 1000; ++i ) 
       accs.emplace_back(create_account("a"+fc::to_string(i), sam_key));
+   auto start = fc::time_point::now();
    for( uint32_t i = 0; i < 1e6; ++i )
    {
       const auto& a = accs[i % 1000];
