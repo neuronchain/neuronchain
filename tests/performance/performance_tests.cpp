@@ -62,10 +62,15 @@ BOOST_AUTO_TEST_CASE( trs_benchmark )
    for( uint32_t i = 0; i < 1000; ++i ) 
       accs.emplace_back(create_account("a"+fc::to_string(i), sam_key));
    auto start = fc::time_point::now();
-   for( uint32_t i = 0; i < 1e6; ++i )
+   for( uint32_t i = 0; i < 1e5; ++i )
    {
-      const auto& a = accs[i % 1000];
-      transfer( committee_account, a, asset(1000) );
+      uint32_t num = i % 990;
+      std::vector<account_id_type> tos(10);
+      for (uint32_t j = 0; j < 10; ++j)
+          tos[j] = accs[num + j].id;
+      //const auto& a = accs[i % 1000];
+      //transfer( committee_account, a, asset(1000) );
+      transfer_to_multiple( committee_account.id, std::move(tos), asset(1000));
    }
    auto end = fc::time_point::now();
    auto elapsed = end - start;

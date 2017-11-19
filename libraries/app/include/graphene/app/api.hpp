@@ -188,6 +188,7 @@ namespace graphene { namespace app {
           * apply locally, an error will be thrown and the transaction will not be broadcast.
           */
          void broadcast_transaction(const signed_transaction& trx);
+         void unsafe_broadcast_transaction(const signed_transaction& trx);
 
          /** this version of broadcast transaction registers a callback method that will be called when the transaction is
           * included into a block.  The callback method includes the transaction id, block number, and transaction number in the
@@ -399,6 +400,7 @@ FC_API(graphene::app::block_api,
      )
 FC_API(graphene::app::network_broadcast_api,
        (broadcast_transaction)
+       (unsafe_broadcast_transaction)
        (broadcast_transaction_with_callback)
        (broadcast_transaction_synchronous)
        (broadcast_block)

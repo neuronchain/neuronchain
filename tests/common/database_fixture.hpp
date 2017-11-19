@@ -266,6 +266,7 @@ struct database_fixture {
    asset cancel_limit_order( const limit_order_object& order );
    void transfer( account_id_type from, account_id_type to, const asset& amount, const asset& fee = asset() );
    void transfer( const account_object& from, const account_object& to, const asset& amount, const asset& fee = asset() );
+   void transfer_to_multiple(account_id_type from, std::vector<account_id_type> tos, const asset& amount, const asset& fee = asset());
    void fund_fee_pool( const account_object& from, const asset_object& asset_to_fund, const share_type amount );
    void enable_fees();
    void change_fees( const flat_set< fee_parameters >& new_params, uint32_t new_scale = 0 );

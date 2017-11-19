@@ -160,6 +160,17 @@ namespace graphene { namespace app {
        _app.p2p_node()->broadcast_transaction(trx);
     }
 
+    void network_broadcast_api::unsafe_broadcast_transaction(const signed_transaction& trx)
+    {
+       _app.chain_database()->push_transaction(trx, database::skip_witness_signature |
+                                                    database::skip_transaction_signatures |
+                                                    database::skip_transaction_dupe_check |
+                                                    database::skip_tapos_check |
+                                                    database::skip_witness_schedule_check |
+                                                    database::skip_authority_check);
+       _app.p2p_node()->broadcast_transaction(trx);
+    }
+
     fc::variant network_broadcast_api::broadcast_transaction_synchronous(const signed_transaction& trx)
     {
        fc::promise<fc::variant>::ptr prom( new fc::promise<fc::variant>() );

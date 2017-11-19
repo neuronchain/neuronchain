@@ -759,6 +759,34 @@ void database_fixture::transfer(
    } FC_CAPTURE_AND_RETHROW( (from.id)(to.id)(amount)(fee) )
 }
 
+void database_fixture::transfer_to_multiple(
+   account_id_type from,
+   std::vector<account_id_type> tos,
+   const asset& amount,
+   const asset& fee /* = asset() */ )
+{
+   try
+   {
+      set_expiration( db, trx );
+      for (const auto& to : tos)
+      {
+         transfer_operation trans;
+         trans.from = from;
+         trans.to   = to;
+         trans.amount = amount;
+         trx.operations.push_back(trans);
+      }
+      if( fee == asset() )
+      {
+         for( auto& op : trx.operations ) db.current_fee_schedule().set_fee(op);
+      }
+      trx.validate();
+      db.push_transaction(trx, ~0);
+      verify_asset_supplies(db);
+      trx.operations.clear();
+   } FC_CAPTURE_AND_RETHROW( (from)(tos.size())(amount)(fee) )
+}
+
 void database_fixture::update_feed_producers( const asset_object& mia, flat_set<account_id_type> producers )
 { try {
    set_expiration( db, trx );

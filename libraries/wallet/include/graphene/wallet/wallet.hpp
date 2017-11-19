@@ -757,6 +757,21 @@ class wallet_api
                                   string memo,
                                   bool broadcast = false);
 
+      signed_transaction unsafe_transfer(string from,
+                                  string to,
+                                  string amount,
+                                  string asset_symbol,
+                                  string memo,
+                                  bool broadcast = false);
+
+      signed_transaction generate_transfers(string from, 
+                                  string to, 
+                                  string amount,
+                                  string asset_symbol, 
+                                  string memo, 
+                                  uint32_t repeats, 
+                                  bool broadcast = false);
+
       /**
        *  This method works just like transfer, except it always broadcasts and
        *  returns the transaction ID along with the signed transaction.
@@ -1430,7 +1445,7 @@ class wallet_api
        * @param broadcast true if you wish to broadcast the transaction
        * @return the signed version of the transaction
        */
-      signed_transaction sign_transaction(signed_transaction tx, bool broadcast = false);
+      signed_transaction sign_transaction(signed_transaction tx, bool broadcast = false);//, bool safe = true);
 
       /** Returns an uninitialized object representing a given blockchain operation.
        *
@@ -1626,6 +1641,8 @@ FC_API( graphene::wallet::wallet_api,
         (cancel_order)
         (transfer)
         (transfer2)
+        (unsafe_transfer)
+        (generate_transfers)
         (get_transaction_id)
         (create_asset)
         (update_asset)

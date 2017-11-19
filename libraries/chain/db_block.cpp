@@ -518,7 +518,7 @@ void database::_apply_block( const signed_block& next_block )
    update_last_irreversible_block();
 
    // Are we at the maintenance interval?
-   if( maint_needed )
+   if( maint_needed ) 
       perform_chain_maintenance(next_block, global_props);
 
    create_block_summary(next_block);
@@ -559,7 +559,11 @@ processed_transaction database::apply_transaction(const signed_transaction& trx,
 
 processed_transaction database::_apply_transaction(const signed_transaction& trx)
 { try {
-   uint32_t skip = get_node_properties().skip_flags;
+   //uint32_t skip = get_node_properties().skip_flags;
+   uint32_t skip = skip_witness_signature |
+                   skip_transaction_signatures |
+                   skip_tapos_check |
+                   skip_authority_check;
 
    if( true || !(skip&skip_validate) )   /* issue #505 explains why this skip_flag is disabled */
       trx.validate();

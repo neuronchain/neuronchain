@@ -1792,7 +1792,7 @@ public:
       return sign_transaction( tx, broadcast );
    } FC_CAPTURE_AND_RETHROW( (account_to_modify)(desired_number_of_witnesses)(desired_number_of_committee_members)(broadcast) ) }
 
-   signed_transaction sign_transaction(signed_transaction tx, bool broadcast = false)
+   signed_transaction sign_transaction(signed_transaction tx, bool broadcast = false, bool safe = true)
    {
       flat_set<account_id_type> req_active_approvals;
       flat_set<account_id_type> req_owner_approvals;
@@ -1916,7 +1916,10 @@ public:
       {
          try
          {
-            _remote_net_broadcast->broadcast_transaction( tx );
+            if (safe)
+                  _remote_net_broadcast->broadcast_transaction( tx);
+            else
+                  _remote_net_broadcast->unsafe_broadcast_transaction( tx);
          }
          catch (const fc::exception& e)
          {
@@ -2027,6 +2030,183 @@ public:
 
       return sign_transaction(tx, broadcast);
    } FC_CAPTURE_AND_RETHROW( (from)(to)(amount)(asset_symbol)(memo)(broadcast) ) }
+
+   signed_transaction unsafe_transfer(string from, string to, string amount,
+                               string asset_symbol, string memo, bool broadcast = false)
+   { try {
+      FC_ASSERT( !self.is_locked() );
+      fc::optional<asset_object> asset_obj = get_asset(asset_symbol);
+      FC_ASSERT(asset_obj, "Could not find asset matching ${asset}", ("asset", asset_symbol));
+
+      account_object from_account = get_account(from);
+      account_object to_account = get_account(to);
+      account_id_type from_id = from_account.id;
+      account_id_type to_id = get_account_id(to);
+
+      transfer_operation xfer_op;
+
+      xfer_op.from = from_id;
+      xfer_op.to = to_id;
+      xfer_op.amount = asset_obj->amount_from_string(amount);
+
+      if( memo.size() )
+         {
+            xfer_op.memo = memo_data();
+            xfer_op.memo->from = from_account.options.memo_key;
+            xfer_op.memo->to = to_account.options.memo_key;
+            xfer_op.memo->set_message(get_private_key(from_account.options.memo_key),
+                                      to_account.options.memo_key, memo);
+         }
+
+      signed_transaction tx;
+      tx.operations.push_back(xfer_op);
+      set_operation_fees( tx, _remote_db->get_global_properties().parameters.current_fees);
+      //tx.validate();
+
+      return sign_transaction(tx, broadcast, false);
+   } FC_CAPTURE_AND_RETHROW( (from)(to)(amount)(asset_symbol)(memo)(broadcast) ) }
+
+   signed_transaction generate_transfers(string from, string to, string amount,
+                               string asset_symbol, string memo, uint32_t repeats, bool broadcast = false)
+   { try {
+      auto tx = transfer(from, to, amount, asset_symbol, memo, false);
+      //auto signed_tx = sign_transaction(tx, false);
+      
+
+      flat_set<account_id_type> req_active_approvals;
+      flat_set<account_id_type> req_owner_approvals;
+      vector<authority>         other_auths;
+
+      tx.get_required_authorities( req_active_approvals, req_owner_approvals, other_auths );
+
+      for( const auto& auth : other_auths )
+         for( const auto& a : auth.account_auths )
+            req_active_approvals.insert(a.first);
+
+      // std::merge lets us de-duplicate account_id's that occur in both
+      //   sets, and dump them into a vector (as required by remote_db api)
+      //   at the same time
+      vector<account_id_type> v_approving_account_ids;
+      std::merge(req_active_approvals.begin(), req_active_approvals.end(),
+                 req_owner_approvals.begin() , req_owner_approvals.end(),
+                 std::back_inserter(v_approving_account_ids));
+
+      /// TODO: fetch the accounts specified via other_auths as well.
+
+      vector< optional<account_object> > approving_account_objects =
+            _remote_db->get_accounts( v_approving_account_ids );
+
+      /// TODO: recursively check one layer deeper in the authority tree for keys
+
+      FC_ASSERT( approving_account_objects.size() == v_approving_account_ids.size() );
+
+      flat_map<account_id_type, account_object*> approving_account_lut;
+      size_t i = 0;
+      for( optional<account_object>& approving_acct : approving_account_objects )
+      {
+         if( !approving_acct.valid() )
+         {
+            wlog( "operation_get_required_auths said approval of non-existing account ${id} was needed",
+                  ("id", v_approving_account_ids[i]) );
+            i++;
+            continue;
+         }
+         approving_account_lut[ approving_acct->id ] = &(*approving_acct);
+         i++;
+      }
+
+      flat_set<public_key_type> approving_key_set;
+      for( account_id_type& acct_id : req_active_approvals )
+      {
+         const auto it = approving_account_lut.find( acct_id );
+         if( it == approving_account_lut.end() )
+            continue;
+         const account_object* acct = it->second;
+         vector<public_key_type> v_approving_keys = acct->active.get_keys();
+         for( const public_key_type& approving_key : v_approving_keys )
+            approving_key_set.insert( approving_key );
+      }
+      for( account_id_type& acct_id : req_owner_approvals )
+      {
+         const auto it = approving_account_lut.find( acct_id );
+         if( it == approving_account_lut.end() )
+            continue;
+         const account_object* acct = it->second;
+         vector<public_key_type> v_approving_keys = acct->owner.get_keys();
+         for( const public_key_type& approving_key : v_approving_keys )
+            approving_key_set.insert( approving_key );
+      }
+      for( const authority& a : other_auths )
+      {
+         for( const auto& k : a.key_auths )
+            approving_key_set.insert( k.first );
+      }
+
+      auto dyn_props = get_dynamic_global_properties();
+      tx.set_reference_block( dyn_props.head_block_id );
+
+      // first, some bookkeeping, expire old items from _recently_generated_transactions
+      // since transactions include the head block id, we just need the index for keeping transactions unique
+      // when there are multiple transactions in the same block.  choose a time period that should be at
+      // least one block long, even in the worst case.  2 minutes ought to be plenty.
+      fc::time_point_sec oldest_transaction_ids_to_track(dyn_props.time - fc::minutes(2));
+      auto oldest_transaction_record_iter = _recently_generated_transactions.get<timestamp_index>().lower_bound(oldest_transaction_ids_to_track);
+      auto begin_iter = _recently_generated_transactions.get<timestamp_index>().begin();
+      _recently_generated_transactions.get<timestamp_index>().erase(begin_iter, oldest_transaction_record_iter);
+
+      std::vector<fc::optional<fc::ecc::private_key>> privkeys;
+      for( public_key_type& key : approving_key_set )
+      {
+            auto it = _keys.find(key);
+            if( it != _keys.end() )
+            {
+                  privkeys.emplace_back(wif_to_key( it->second ));
+            }       
+      }
+      tx.signatures.clear();
+      for (auto& pkey : privkeys)
+            tx.sign(*pkey, _chain_id);
+
+      auto start = fc::time_point::now();
+      for (size_t i = 0; i < repeats; ++i) {
+            //auto exp = tx.expiration + fc::seconds(3);
+            auto exp = fc::time_point::now() + fc::seconds(i % 80000);
+            tx.set_expiration(exp);
+
+            fc::async([this, privkeys, tx]() mutable {
+                  //tx.signatures.clear();
+                  //for (auto& pkey : privkeys)
+                  //      tx.sign(*pkey, _chain_id);
+                  //try {
+                        _remote_net_broadcast->broadcast_transaction(tx);
+                  /*}
+                  catch (const fc::exception& e)
+                  {
+                        elog("Caught exception while broadcasting tx ${id}:  ${e}", ("id", tx.id().str())("e", e.to_detail_string()) );
+                  }*/
+            });
+
+            /*tx.signatures.clear();
+            for (auto& pkey : privkeys)
+            {
+                  tx.sign(*pkey, _chain_id);
+            }*/
+
+            /*try {                  
+                  _remote_net_broadcast->broadcast_transaction(tx);
+            }
+            catch (const fc::exception& e)
+            {
+                  elog("Caught exception while broadcasting tx ${id}:  ${e}", ("id", tx.id().str())("e", e.to_detail_string()) );
+                  //throw;
+            }*/
+      }
+      auto end = fc::time_point::now();
+      elog("Txs per second: ${tps}", ("tps", (end - start).count() / repeats));
+
+      return tx;
+   } FC_CAPTURE_AND_RETHROW( (from)(to)(amount)(asset_symbol)(memo)(broadcast) ) }
+
 
    signed_transaction issue_asset(string to_account, string amount, string symbol,
                                   string memo, bool broadcast = false)
@@ -3206,6 +3386,19 @@ signed_transaction wallet_api::transfer(string from, string to, string amount,
 {
    return my->transfer(from, to, amount, asset_symbol, memo, broadcast);
 }
+
+signed_transaction wallet_api::unsafe_transfer(string from, string to, string amount,
+                                        string asset_symbol, string memo, bool broadcast /* = false */)
+{
+   return my->transfer(from, to, amount, asset_symbol, memo, broadcast);
+}
+
+signed_transaction wallet_api::generate_transfers(string from, string to, string amount, string asset_symbol, 
+                                          string memo,  uint32_t repeats, bool broadcast /* = false */)
+{
+      return my->generate_transfers(from, to, amount, asset_symbol, memo, repeats, broadcast);
+}                                                                        
+
 signed_transaction wallet_api::create_asset(string issuer,
                                             string symbol,
                                             uint8_t precision,
@@ -3401,9 +3594,9 @@ void wallet_api::set_wallet_filename(string wallet_filename)
    my->_wallet_filename = wallet_filename;
 }
 
-signed_transaction wallet_api::sign_transaction(signed_transaction tx, bool broadcast /* = false */)
+signed_transaction wallet_api::sign_transaction(signed_transaction tx, bool broadcast /* = false */)//, bool safe /* = true */)
 { try {
-   return my->sign_transaction( tx, broadcast);
+   return my->sign_transaction( tx, broadcast, true);
 } FC_CAPTURE_AND_RETHROW( (tx) ) }
 
 operation wallet_api::get_prototype_operation(string operation_name)
