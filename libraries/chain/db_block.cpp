@@ -545,7 +545,76 @@ void database::_apply_block( const signed_block& next_block )
    notify_changed_objects();
 } FC_CAPTURE_AND_RETHROW( (next_block.block_num()) )  }
 
+void database::bundle_transaction(signed_transaction& bundle, const signed_transaction& trx, uint32_t skip)
+{
+   /*fc::time_point now_fine = fc::time_point::now();
+   fc::time_point_sec now = now_fine + fc::microseconds( 500000 );
 
+   uint32_t slot_num = get_slot_at_time( now );
+   FC_ASSERT( slot_num > 0 );
+   witness_id_type scheduled_witness = get_scheduled_witness( slot_num );
+   FC_ASSERT( scheduled_witness != witness_id );*/
+
+
+  #if 0
+  if( true || !(skip&skip_validate) )   /* issue #505 explains why this skip_flag is disabled */
+      trx.validate();
+
+   auto& trx_idx = get_mutable_index_type<transaction_index>();
+   const chain_id_type& chain_id = get_chain_id();
+   auto trx_id = trx.id();
+   FC_ASSERT( (skip & skip_transaction_dupe_check) ||
+              trx_idx.indices().get<by_trx_id>().find(trx_id) == trx_idx.indices().get<by_trx_id>().end() );
+   transaction_evaluation_state eval_state(this);
+   const chain_parameters& chain_parameters = get_global_properties().parameters;
+   eval_state._trx = &trx;
+
+   if( !(skip & (skip_transaction_signatures | skip_authority_check) ) )
+   {
+      auto get_active = [&]( account_id_type id ) { return &id(*this).active; };
+      auto get_owner  = [&]( account_id_type id ) { return &id(*this).owner;  };
+      trx.verify_authority( chain_id, get_active, get_owner, get_global_properties().parameters.max_authority_depth );
+   }
+
+   //Skip all manner of expiration and TaPoS checking if we're on block 1; It's impossible that the transaction is
+   //expired, and TaPoS makes no sense as no blocks exist.
+   if( BOOST_LIKELY(head_block_num() > 0) )
+   {
+      if( !(skip & skip_tapos_check) )
+      {
+         const auto& tapos_block_summary = block_summary_id_type( trx.ref_block_num )(*this);
+
+         //Verify TaPoS block summary has correct ID prefix, and that this block's time is not past the expiration
+         FC_ASSERT( trx.ref_block_prefix == tapos_block_summary.block_id._hash[1] );
+      }
+
+      fc::time_point_sec now = head_block_time();
+
+      FC_ASSERT( trx.expiration <= now + chain_parameters.maximum_time_until_expiration, "",
+                 ("trx.expiration",trx.expiration)("now",now)("max_til_exp",chain_parameters.maximum_time_until_expiration));
+      FC_ASSERT( now <= trx.expiration, "", ("now",now)("trx.exp",trx.expiration) );
+   }
+
+   //Insert transaction into unique transactions database.
+   if( !(skip & skip_transaction_dupe_check) )
+   {
+      create<transaction_object>([&](transaction_object& transaction) {
+         transaction.trx_id = trx_id;
+         transaction.trx = trx;
+      });
+   }
+   #endif
+
+   validate_transaction(trx);
+
+   //Inject transaction into bundle
+   bundle.operations.insert(bundle.operations.end(), trx.operations.begin(), trx.operations.end());
+   if (trx.expiration > bundle.expiration) bundle.expiration = trx.expiration;
+   if (trx.ref_block_num > bundle.ref_block_num) {
+     bundle.ref_block_num = trx.ref_block_num;
+     bundle.ref_block_prefix = trx.ref_block_prefix;
+   }
+}
 
 processed_transaction database::apply_transaction(const signed_transaction& trx, uint32_t skip)
 {

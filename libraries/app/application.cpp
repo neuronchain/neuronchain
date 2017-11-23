@@ -585,15 +585,42 @@ namespace detail {
       { try {
          static fc::time_point last_call;
          static int trx_count = 0;
+         static std::unique_ptr<signed_transaction> bundle{new signed_transaction};
          ++trx_count;
          auto now = fc::time_point::now();
          if( now - last_call > fc::seconds(1) ) {
             ilog("Got ${c} transactions from network", ("c",trx_count) );
             last_call = now;
             trx_count = 0;
+            
+            bundle->sign(fc::ecc::private_key::generate(), get_chain_id());
+
+            _chain_db->push_transaction(*bundle);
+            bundle.reset(new signed_transaction);
          }
 
-         _chain_db->push_transaction( transaction_message.trx );
+         if(_is_block_producer)
+         {
+            try {
+              _chain_db->bundle_transaction(*bundle, transaction_message.trx);
+            }
+            catch (fc::exception& e) {
+              elog("Exception during bundling: ${exception}", ("exception", e));
+              _chain_db->push_transaction( transaction_message.trx );
+              throw;
+            }
+         }
+
+         /*try {
+           _chain_db->bundle_transaction(bundle, transaction_message.trx);
+         }
+         catch (fc::exception& e) {
+           elog("Exception during bundling: ${exception}", ("exception", e));
+          _chain_db->push_transaction( transaction_message.trx );
+          throw;
+         }*/
+
+         //_chain_db->push_transaction( transaction_message.trx );
       } FC_CAPTURE_AND_RETHROW( (transaction_message) ) }
 
       virtual void handle_message(const message& message_to_process) override
