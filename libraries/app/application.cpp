@@ -595,6 +595,8 @@ namespace detail {
             
             bundle->sign(fc::ecc::private_key::generate(), get_chain_id());
 
+            ilog("Bundled ${c} operations", ("c", bundle->operations.size()) );
+            
             _chain_db->push_transaction(*bundle);
             bundle.reset(new signed_transaction);
          }
