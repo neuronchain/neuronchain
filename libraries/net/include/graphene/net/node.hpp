@@ -88,6 +88,8 @@ namespace graphene { namespace net {
           */
          virtual void handle_transaction( const graphene::net::trx_message& trx_msg ) = 0;
 
+
+         virtual void handle_packet(const graphene::net::packet_message& pck_msg ) = 0;
          /**
           *  @brief Called when a new message comes in from the network other than a
           *         block or a transaction.  Currently there are no other possible 
@@ -98,6 +100,7 @@ namespace graphene { namespace net {
           */
          virtual void handle_message( const message& message_to_process ) = 0;
 
+         
          /**
           *  Assuming all data elements are ordered in some way, this method should
           *  return up to limit ids that occur *after* from_id.
@@ -259,7 +262,13 @@ namespace graphene { namespace net {
         virtual void  broadcast( const message& item_to_broadcast );
         virtual void  broadcast_transaction( const signed_transaction& trx )
         {
+           elog("broadcast_trx");
            broadcast( trx_message(trx) );
+        }
+        virtual void broadcast_packet( const signed_packet& bundle)
+        {
+           elog("broadcast_packet");
+            broadcast(packet_message(bundle));
         }
 
         /**
@@ -274,6 +283,7 @@ namespace graphene { namespace net {
         fc::variant_object get_advanced_node_parameters();
         message_propagation_data get_transaction_propagation_data(const graphene::chain::transaction_id_type& transaction_id);
         message_propagation_data get_block_propagation_data(const graphene::chain::block_id_type& block_id);
+        message_propagation_data get_packet_propagation_data(const graphene::chain::packet_id_type& packet_id );
         node_id_t get_node_id() const;
         void set_allowed_peers(const std::vector<node_id_t>& allowed_peers);
 

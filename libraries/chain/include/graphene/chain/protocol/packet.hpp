@@ -22,6 +22,28 @@
  * THE SOFTWARE.
  */
 #pragma once
-#include <graphene/chain/protocol/fee_schedule.hpp>
-#include <graphene/chain/protocol/block.hpp>
-#include <graphene/chain/protocol/packet.hpp>
+#include <graphene/chain/protocol/transaction.hpp>
+
+namespace graphene { namespace chain {
+
+   struct packet
+   {
+       vector<signed_transaction> transactions;
+   };
+   
+   struct signed_packet : public packet
+   {
+       digest_type                digest()const;
+       packet_id_type             id()const;
+       void                       sign( const fc::ecc::private_key& signer );
+       bool                       validate_signee( const fc::ecc::public_key& expected_signee )const;
+       fc::ecc::public_key        signee()const;
+
+       witness_id_type              witness;
+       signature_type               witness_signature;
+   };
+
+} } // graphene::chain
+
+FC_REFLECT( graphene::chain::packet, (transactions) )
+FC_REFLECT_DERIVED( graphene::chain::signed_packet, (graphene::chain::packet), (witness)(witness_signature) )

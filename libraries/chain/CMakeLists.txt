@@ -54,6 +54,7 @@ add_library( graphene_chain
              protocol/custom.cpp
              protocol/operations.cpp
              protocol/transaction.cpp
+             protocol/packet.cpp
              protocol/block.cpp
              protocol/fee_schedule.cpp
              protocol/confidential.cpp

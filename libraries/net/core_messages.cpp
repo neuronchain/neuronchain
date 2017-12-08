@@ -28,6 +28,7 @@ namespace graphene { namespace net {
 
   const core_message_type_enum trx_message::type                             = core_message_type_enum::trx_message_type;
   const core_message_type_enum block_message::type                           = core_message_type_enum::block_message_type;
+  const core_message_type_enum packet_message::type                          = core_message_type_enum::packet_message_type;
   const core_message_type_enum item_ids_inventory_message::type              = core_message_type_enum::item_ids_inventory_message_type;
   const core_message_type_enum blockchain_item_ids_inventory_message::type   = core_message_type_enum::blockchain_item_ids_inventory_message_type;
   const core_message_type_enum fetch_blockchain_item_ids_message::type       = core_message_type_enum::fetch_blockchain_item_ids_message_type;

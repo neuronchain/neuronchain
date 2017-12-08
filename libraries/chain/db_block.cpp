@@ -545,8 +545,8 @@ void database::_apply_block( const signed_block& next_block )
    notify_changed_objects();
 } FC_CAPTURE_AND_RETHROW( (next_block.block_num()) )  }
 
-void database::bundle_transaction(signed_transaction& bundle, const signed_transaction& trx, uint32_t skip)
-{
+void database::bundle_transaction(const signed_transaction& trx, uint32_t skip)
+{ try {
    /*fc::time_point now_fine = fc::time_point::now();
    fc::time_point_sec now = now_fine + fc::microseconds( 500000 );
 
@@ -556,65 +556,43 @@ void database::bundle_transaction(signed_transaction& bundle, const signed_trans
    FC_ASSERT( scheduled_witness != witness_id );*/
 
 
-  #if 0
-  if( true || !(skip&skip_validate) )   /* issue #505 explains why this skip_flag is disabled */
-      trx.validate();
+   //validate_transaction(trx);
 
-   auto& trx_idx = get_mutable_index_type<transaction_index>();
-   const chain_id_type& chain_id = get_chain_id();
-   auto trx_id = trx.id();
-   FC_ASSERT( (skip & skip_transaction_dupe_check) ||
-              trx_idx.indices().get<by_trx_id>().find(trx_id) == trx_idx.indices().get<by_trx_id>().end() );
-   transaction_evaluation_state eval_state(this);
+
    const chain_parameters& chain_parameters = get_global_properties().parameters;
-   eval_state._trx = &trx;
+   const size_t bundle_size = chain_parameters.bundle_size;
+   //static std::unique_ptr<packet> bundle {new packet};
 
-   if( !(skip & (skip_transaction_signatures | skip_authority_check) ) )
-   {
-      auto get_active = [&]( account_id_type id ) { return &id(*this).active; };
-      auto get_owner  = [&]( account_id_type id ) { return &id(*this).owner;  };
-      trx.verify_authority( chain_id, get_active, get_owner, get_global_properties().parameters.max_authority_depth );
+   _pending_packet->transactions.push_back(trx);
+/*   if(bundle->transactions.size() >= bundle_size) {
+      packet result{*_pending_packet};
+      bundle.reset();
+      return result;
    }
+   return {};*/
+} FC_CAPTURE_AND_RETHROW() }
 
-   //Skip all manner of expiration and TaPoS checking if we're on block 1; It's impossible that the transaction is
-   //expired, and TaPoS makes no sense as no blocks exist.
-   if( BOOST_LIKELY(head_block_num() > 0) )
-   {
-      if( !(skip & skip_tapos_check) )
-      {
-         const auto& tapos_block_summary = block_summary_id_type( trx.ref_block_num )(*this);
+signed_packet database::push_packet(witness_id_type witness_id, const fc::ecc::private_key& block_signing_private_key)
+{ try {
+   signed_packet signed_pending_packet;
+   signed_pending_packet.sign(block_signing_private_key);
+   signed_pending_packet.witness = witness_id;
 
-         //Verify TaPoS block summary has correct ID prefix, and that this block's time is not past the expiration
-         FC_ASSERT( trx.ref_block_prefix == tapos_block_summary.block_id._hash[1] );
-      }
+   signed_pending_packet.transactions = std::move(_pending_packet->transactions);
+   _pending_packet.reset(new packet);
+   return signed_pending_packet;
+} FC_CAPTURE_AND_RETHROW() }
 
-      fc::time_point_sec now = head_block_time();
+void database::validate_packet(const signed_packet& packet)
+{ try {
+   auto wits = get_global_properties().active_witnesses;
+   auto wit_ptr = wits.find(packet.witness);
+   FC_ASSERT( wit_ptr != wits.end() );
+   FC_ASSERT( packet.validate_signee( get(*wit_ptr).signing_key ) ); //(*wit_ptr)(*_chain_db).signing_key ) );
 
-      FC_ASSERT( trx.expiration <= now + chain_parameters.maximum_time_until_expiration, "",
-                 ("trx.expiration",trx.expiration)("now",now)("max_til_exp",chain_parameters.maximum_time_until_expiration));
-      FC_ASSERT( now <= trx.expiration, "", ("now",now)("trx.exp",trx.expiration) );
-   }
-
-   //Insert transaction into unique transactions database.
-   if( !(skip & skip_transaction_dupe_check) )
-   {
-      create<transaction_object>([&](transaction_object& transaction) {
-         transaction.trx_id = trx_id;
-         transaction.trx = trx;
-      });
-   }
-   #endif
-
-   validate_transaction(trx);
-
-   //Inject transaction into bundle
-   bundle.operations.insert(bundle.operations.end(), trx.operations.begin(), trx.operations.end());
-   if (trx.expiration > bundle.expiration) bundle.expiration = trx.expiration;
-   if (trx.ref_block_num > bundle.ref_block_num) {
-     bundle.ref_block_num = trx.ref_block_num;
-     bundle.ref_block_prefix = trx.ref_block_prefix;
-   }
-}
+   for (auto& trx : packet.transactions)
+      push_transaction( trx, skip_witness_signature );
+} FC_CAPTURE_AND_RETHROW() }
 
 processed_transaction database::apply_transaction(const signed_transaction& trx, uint32_t skip)
 {
@@ -633,6 +611,7 @@ processed_transaction database::_apply_transaction(const signed_transaction& trx
                    skip_transaction_signatures |
                    skip_tapos_check |
                    skip_authority_check;
+                   skip_transaction_dupe_check;
 
    if( true || !(skip&skip_validate) )   /* issue #505 explains why this skip_flag is disabled */
       trx.validate();

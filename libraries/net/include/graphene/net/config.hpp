@@ -59,7 +59,7 @@
 #define GRAPHENE_NET_DEFAULT_DESIRED_CONNECTIONS             20
 #define GRAPHENE_NET_DEFAULT_MAX_CONNECTIONS                 200
 
-#define GRAPHENE_NET_MAXIMUM_QUEUED_MESSAGES_IN_BYTES        (1024 * 1024)
+#define GRAPHENE_NET_MAXIMUM_QUEUED_MESSAGES_IN_BYTES        (10 * 1024 * 1024)
 
 /**
  * When we receive a message from the network, we advertise it to
@@ -81,7 +81,7 @@
  */
 #define GRAPHENE_NET_FUTURE_SYNC_BLOCKS_GRACE_PERIOD_SEC     (60 * 60)
 
-#define GRAPHENE_NET_MAX_INVENTORY_SIZE_IN_MINUTES           2
+#define GRAPHENE_NET_MAX_INVENTORY_SIZE_IN_MINUTES           5
 
 #define GRAPHENE_NET_MAX_BLOCKS_PER_PEER_DURING_SYNCING      200
 
@@ -106,4 +106,4 @@
  */
 #define GRAPHENE_NET_MIN_BLOCK_IDS_TO_PREFETCH               10000
 
-#define GRAPHENE_NET_MAX_TRX_PER_SECOND                      1000
+#define GRAPHENE_NET_MAX_TRX_PER_SECOND                      1000000

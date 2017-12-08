@@ -289,6 +289,7 @@ namespace graphene { namespace net { namespace detail {
                                    (handle_message) \
                                    (handle_block) \
                                    (handle_transaction) \
+                                   (handle_packet) \
                                    (get_block_ids) \
                                    (get_item) \
                                    (get_chain_id) \
@@ -385,6 +386,7 @@ namespace graphene { namespace net { namespace detail {
       void handle_message( const message& ) override;
       bool handle_block( const graphene::net::block_message& block_message, bool sync_mode, std::vector<fc::uint160_t>& contained_transaction_message_ids ) override;
       void handle_transaction( const graphene::net::trx_message& transaction_message ) override;
+      void handle_packet( const graphene::net::packet_message& pck_message ) override;
       std::vector<item_hash_t> get_block_ids(const std::vector<item_hash_t>& blockchain_synopsis,
                                              uint32_t& remaining_item_count,
                                              uint32_t limit = 2000) override;
@@ -743,6 +745,7 @@ namespace graphene { namespace net { namespace detail {
       fc::variant_object         get_advanced_node_parameters();
       message_propagation_data   get_transaction_propagation_data( const graphene::net::transaction_id_type& transaction_id );
       message_propagation_data   get_block_propagation_data( const graphene::net::block_id_type& block_id );
+      message_propagation_data   get_packet_propagation_data( const graphene::net::packet_id_type& packet_id );
 
       node_id_t                  get_node_id() const;
       void                       set_allowed_peers( const std::vector<node_id_t>& allowed_peers );
@@ -3809,6 +3812,12 @@ namespace graphene { namespace net { namespace detail {
             dlog("passing message containing transaction ${trx} to client", ("trx", transaction_message_to_process.trx.id()));
             _delegate->handle_transaction(transaction_message_to_process);
           }
+          else if (message_to_process.msg_type == packet_message_type)
+          {
+            packet_message packet_message_to_process = message_to_process.as<packet_message>();
+            dlog("passing message containing packet to client");//, ("pck", packet_message_to_process.pck.id()));
+            _delegate->handle_packet(packet_message_to_process);
+          }
           else
             _delegate->handle_message( message_to_process );
           message_validated_time = fc::time_point::now();
@@ -4867,6 +4876,11 @@ namespace graphene { namespace net { namespace detail {
         hash_of_message_contents = transaction_message_to_broadcast.trx.id(); // for debugging
         dlog( "broadcasting trx: ${trx}", ("trx", transaction_message_to_broadcast) );
       }
+      else if (item_to_broadcast.msg_type == graphene::net::packet_message_type )
+      {
+        graphene::net::packet_message packet_message_to_broadcast = item_to_broadcast.as<graphene::net::packet_message>();
+        hash_of_message_contents = packet_message_to_broadcast.pck.id(); // for debugging ???;
+      }
       message_hash_type hash_of_item_to_broadcast = item_to_broadcast.id();
 
       _message_cache.cache_message( item_to_broadcast, hash_of_item_to_broadcast, propagation_data, hash_of_message_contents );
@@ -4954,6 +4968,12 @@ namespace graphene { namespace net { namespace detail {
     {
       VERIFY_CORRECT_THREAD();
       return _message_cache.get_message_propagation_data( block_id );
+    }
+
+    message_propagation_data node_impl::get_packet_propagation_data( const graphene::net::packet_id_type& packet_id )
+    {
+      VERIFY_CORRECT_THREAD();
+      return _message_cache.get_message_propagation_data( packet_id );
     }
 
     node_id_t node_impl::get_node_id() const
@@ -5178,6 +5198,11 @@ namespace graphene { namespace net { namespace detail {
     INVOKE_IN_IMPL(get_block_propagation_data, block_id);
   }
 
+  message_propagation_data node::get_packet_propagation_data( const graphene::net::packet_id_type& packet_id )
+  {
+    INVOKE_IN_IMPL(get_packet_propagation_data, packet_id);
+  }
+
   node_id_t node::get_node_id() const
   {
     INVOKE_IN_IMPL(get_node_id);
@@ -5254,6 +5279,10 @@ namespace graphene { namespace net { namespace detail {
         {
           std::vector<fc::uint160_t> contained_transaction_message_ids;
           destination_node->delegate->handle_block(message_to_deliver.as<block_message>(), false, contained_transaction_message_ids);
+        }
+        else if (message_to_deliver.msg_type == packet_message_type)
+        {
+          destination_node->delegate->handle_packet(message_to_deliver.as<packet_message>());
         }
         else
           destination_node->delegate->handle_message(message_to_deliver);
@@ -5399,6 +5428,11 @@ namespace graphene { namespace net { namespace detail {
     void statistics_gathering_node_delegate_wrapper::handle_transaction( const graphene::net::trx_message& transaction_message )
     {
       INVOKE_AND_COLLECT_STATISTICS(handle_transaction, transaction_message);
+    }
+
+    void statistics_gathering_node_delegate_wrapper::handle_packet(const graphene::net::packet_message& packet_message)
+    {
+      INVOKE_AND_COLLECT_STATISTICS(handle_packet, packet_message);
     }
 
     std::vector<item_hash_t> statistics_gathering_node_delegate_wrapper::get_block_ids(const std::vector<item_hash_t>& blockchain_synopsis,

@@ -230,6 +230,7 @@ namespace graphene { namespace chain {
 
    typedef fc::array<char, GRAPHENE_MAX_ASSET_SYMBOL_LENGTH>    symbol_type;
    typedef fc::ripemd160                                        block_id_type;
+   typedef fc::ripemd160                                        packet_id_type;
    typedef fc::ripemd160                                        checksum_type;
    typedef fc::ripemd160                                        transaction_id_type;
    typedef fc::sha256                                           digest_type;

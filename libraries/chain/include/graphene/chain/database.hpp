@@ -422,8 +422,10 @@ namespace graphene { namespace chain {
          void                  apply_block( const signed_block& next_block, uint32_t skip = skip_nothing );
          processed_transaction apply_transaction( const signed_transaction& trx, uint32_t skip = skip_nothing );
          operation_result      apply_operation( transaction_evaluation_state& eval_state, const operation& op );
-         
-         void                  bundle_transaction(signed_transaction& bundle, const signed_transaction& trx, uint32_t skip = skip_nothing);
+
+         signed_packet push_packet(witness_id_type witness_id, const fc::ecc::private_key& block_signing_private_key);
+         void bundle_transaction(const signed_transaction& trx, uint32_t skip = skip_nothing);
+         void validate_packet(const signed_packet& packet);
       private:
          void                  _apply_block( const signed_block& next_block );
          processed_transaction _apply_transaction( const signed_transaction& trx );
@@ -509,6 +511,8 @@ namespace graphene { namespace chain {
          flat_map<uint32_t,block_id_type>  _checkpoints;
 
          node_property_object              _node_property_object;
+
+         std::unique_ptr<packet>           _pending_packet{ new packet };
    };
 
    namespace detail

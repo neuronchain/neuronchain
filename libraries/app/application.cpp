@@ -585,10 +585,14 @@ namespace detail {
       { try {
          static fc::time_point last_call;
          static int trx_count = 0;
-         static std::unique_ptr<signed_transaction> bundle{new signed_transaction};
+         //static std::unique_ptr<signed_transaction> bundle{new signed_transaction};
          ++trx_count;
          auto now = fc::time_point::now();
          if( now - last_call > fc::seconds(1) ) {
+            ilog("Got ${c} transactions from network", ("c",trx_count) );
+            last_call = now;
+         }
+         /*if( now - last_call > fc::seconds(1) ) {
             ilog("Got ${c} transactions from network", ("c",trx_count) );
             last_call = now;
             trx_count = 0;
@@ -599,9 +603,9 @@ namespace detail {
             
             _chain_db->push_transaction(*bundle);
             bundle.reset(new signed_transaction);
-         }
+         }*/
 
-         if(_is_block_producer)
+        /* if(true || _is_block_producer)
          {
             try {
               _chain_db->bundle_transaction(*bundle, transaction_message.trx);
@@ -611,7 +615,7 @@ namespace detail {
               _chain_db->push_transaction( transaction_message.trx );
               throw;
             }
-         }
+         }*/
 
          /*try {
            _chain_db->bundle_transaction(bundle, transaction_message.trx);
@@ -622,12 +626,30 @@ namespace detail {
           throw;
          }*/
 
-         //_chain_db->push_transaction( transaction_message.trx );
+         _chain_db->push_transaction( transaction_message.trx );
       } FC_CAPTURE_AND_RETHROW( (transaction_message) ) }
+
+      virtual void handle_packet(const graphene::net::packet_message& pck_msg )
+      { try {
+         static fc::time_point last_call;
+         static int trx_count = 0;
+         static int pck_count = 0;
+         ++pck_count;
+         trx_count += pck_msg.pck.transactions.size();
+         auto now = fc::time_point::now();
+         if( now - last_call > fc::seconds(1) ) {
+            ilog("Got ${c} transactions bundled in ${p} packets from network", ("c", trx_count)("p", pck_count) );
+            last_call = now;
+            trx_count = 0;
+            pck_count = 0;
+         }
+
+         _chain_db->validate_packet(pck_msg.pck);
+      } FC_CAPTURE_AND_RETHROW( (pck_msg) ) }
 
       virtual void handle_message(const message& message_to_process) override
       {
-         // not a transaction, not a block
+         // not a transaction, not a block and not a packet
          FC_THROW( "Invalid Message Type" );
       }
 
@@ -1079,6 +1101,11 @@ std::shared_ptr<chain::database> application::chain_database() const
 void application::set_block_production(bool producing_blocks)
 {
    my->_is_block_producer = producing_blocks;
+}
+
+bool application::is_block_producer()
+{
+   return my->_is_block_producer;
 }
 
 optional< api_access_info > application::get_api_access_info( const string& username )const

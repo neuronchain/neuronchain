@@ -76,6 +76,8 @@ void database::update_global_dynamic_data( const signed_block& b )
       else if( dgp.recently_missed_count > 0 )
          dgp.recently_missed_count--;
 
+      dgp.head_block_transactions = b.transactions.size();
+
       dgp.head_block_number = b.block_num();
       dgp.head_block_id = b.id();
       dgp.time = b.timestamp;

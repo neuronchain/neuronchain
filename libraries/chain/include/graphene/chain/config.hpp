@@ -188,3 +188,5 @@
 #define GRAPHENE_IMPORTANCE_OUTLIER_WEIGHT                    0.9
 #define GRAPHENE_IMPORTANCE_OMEGA_O                           1.25
 #define GRAPHENE_IMPORTANCE_OMEGA_I                           0.1337
+
+#define GRAPHENE_BUNDLE_SIZE                                  1

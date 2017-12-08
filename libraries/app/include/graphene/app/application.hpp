@@ -81,6 +81,7 @@ namespace graphene { namespace app {
          std::shared_ptr<chain::database> chain_database()const;
 
          void set_block_production(bool producing_blocks);
+         bool is_block_producer();
          fc::optional< api_access_info > get_api_access_info( const string& username )const;
          void set_api_access_info(const string& username, api_access_info&& permissions);
 

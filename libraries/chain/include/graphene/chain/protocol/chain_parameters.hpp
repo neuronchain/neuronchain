@@ -84,6 +84,7 @@ namespace graphene { namespace chain {
       double                  structure_outlier_weight            = GRAPHENE_IMPORTANCE_OUTLIER_WEIGHT;
       double                  importance_omega_o                  = GRAPHENE_IMPORTANCE_OMEGA_O;
       double                  importance_omega_i                  = GRAPHENE_IMPORTANCE_OMEGA_I;
+      uint16_t                bundle_size                         = GRAPHENE_BUNDLE_SIZE;
 
       /** defined in fee_schedule.cpp */
       void validate()const;
@@ -134,4 +135,5 @@ FC_REFLECT( graphene::chain::chain_parameters,
             (structure_outlier_weight)
             (importance_omega_o)
             (importance_omega_i)
+            (bundle_size)
           )

@@ -157,7 +157,10 @@ namespace graphene { namespace app {
     {
        trx.validate();
        _app.chain_database()->push_transaction(trx);
-       _app.p2p_node()->broadcast_transaction(trx);
+       if (!_app.is_block_producer())
+          _app.p2p_node()->broadcast_transaction(trx);
+       else
+          _app.chain_database()->bundle_transaction(trx);
     }
 
     void network_broadcast_api::unsafe_broadcast_transaction(const signed_transaction& trx)

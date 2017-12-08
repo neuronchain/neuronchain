@@ -25,6 +25,7 @@
 
 #include <graphene/net/config.hpp>
 #include <graphene/chain/protocol/block.hpp>
+#include <graphene/chain/protocol/packet.hpp>
 
 #include <fc/crypto/ripemd160.hpp>
 #include <fc/crypto/elliptic.hpp>
@@ -43,7 +44,9 @@ namespace graphene { namespace net {
   using graphene::chain::signed_transaction;
   using graphene::chain::block_id_type;
   using graphene::chain::transaction_id_type;
+  using graphene::chain::packet_id_type;
   using graphene::chain::signed_block;
+  using graphene::chain::signed_packet;
 
   typedef fc::ecc::public_key_data node_id_t;
   typedef fc::ripemd160 item_hash_t;
@@ -68,6 +71,7 @@ namespace graphene { namespace net {
   {
     trx_message_type                             = 1000,
     block_message_type                           = 1001,
+    packet_message_type                          = 1002,
     core_message_type_first                      = 5000,
     item_ids_inventory_message_type              = 5001,
     blockchain_item_ids_inventory_message_type   = 5002,
@@ -113,6 +117,17 @@ namespace graphene { namespace net {
       signed_block    block;
       block_id_type   block_id;
 
+   };
+
+   struct packet_message
+   {
+      static const core_message_type_enum type;
+
+      packet_message() {}
+      packet_message(signed_packet packt) :
+        pck(std::move(packt)) {}
+
+      signed_packet pck;
    };
 
   struct item_ids_inventory_message
@@ -406,6 +421,7 @@ namespace graphene { namespace net {
 FC_REFLECT_ENUM( graphene::net::core_message_type_enum,
                  (trx_message_type)
                  (block_message_type)
+                 (packet_message_type)
                  (core_message_type_first)
                  (item_ids_inventory_message_type)
                  (blockchain_item_ids_inventory_message_type)
@@ -428,6 +444,7 @@ FC_REFLECT_ENUM( graphene::net::core_message_type_enum,
 
 FC_REFLECT( graphene::net::trx_message, (trx) )
 FC_REFLECT( graphene::net::block_message, (block)(block_id) )
+FC_REFLECT( graphene::net::packet_message, (pck))
 
 FC_REFLECT( graphene::net::item_id, (item_type)
                                (item_hash) )
