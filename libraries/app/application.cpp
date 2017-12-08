@@ -591,6 +591,7 @@ namespace detail {
          if( now - last_call > fc::seconds(1) ) {
             ilog("Got ${c} transactions from network", ("c",trx_count) );
             last_call = now;
+            trx_count = 0;
          }
          /*if( now - last_call > fc::seconds(1) ) {
             ilog("Got ${c} transactions from network", ("c",trx_count) );

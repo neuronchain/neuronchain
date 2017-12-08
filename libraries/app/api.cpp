@@ -171,7 +171,10 @@ namespace graphene { namespace app {
                                                     database::skip_tapos_check |
                                                     database::skip_witness_schedule_check |
                                                     database::skip_authority_check);
-       _app.p2p_node()->broadcast_transaction(trx);
+       if (!_app.is_block_producer())
+          _app.p2p_node()->broadcast_transaction(trx);
+       else
+          _app.chain_database()->bundle_transaction(trx);
     }
 
     fc::variant network_broadcast_api::broadcast_transaction_synchronous(const signed_transaction& trx)
