@@ -92,10 +92,12 @@ namespace graphene { namespace chain {
           *
           * @param data_dir Path to open or create database in
           * @param genesis_loader A callable object which returns the genesis state to initialize new databases on
+          * @param db_version a version string that changes when the internal database format and/or logic is modified
           */
           void open(
              const fc::path& data_dir,
-             std::function<genesis_state_type()> genesis_loader );
+             std::function<genesis_state_type()> genesis_loader,
+             const std::string& db_version );
 
          /**
           * @brief Rebuild object graph from block history and open detabase
@@ -103,7 +105,7 @@ namespace graphene { namespace chain {
           * This method may be called after or instead of @ref database::open, and will rebuild the object graph by
           * replaying blockchain history. When this method exits successfully, the database will be open.
           */
-         void reindex(fc::path data_dir, const genesis_state_type& initial_allocation = genesis_state_type());
+         void reindex(fc::path data_dir);
 
          /**
           * @brief wipe Delete database from disk, and potentially the raw chain as well.
@@ -340,6 +342,9 @@ namespace graphene { namespace chain {
          void globally_settle_asset( const asset_object& bitasset, const price& settle_price );
          void cancel_order(const force_settlement_object& order, bool create_virtual_op = true);
          void cancel_order(const limit_order_object& order, bool create_virtual_op = true);
+         void revive_bitasset( const asset_object& bitasset );
+         void cancel_bid(const collateral_bid_object& bid, bool create_virtual_op = true);
+         void execute_bid( const collateral_bid_object& bid, share_type debt_covered, share_type collateral_from_fund, const price_feed& current_feed );
 
          /**
           * @brief Process a new limit order through the markets
@@ -375,11 +380,14 @@ namespace graphene { namespace chain {
          /**
           * @return true if the order was completely filled and thus freed.
           */
-         bool fill_order( const limit_order_object& order, const asset& pays, const asset& receives, bool cull_if_small );
-         bool fill_order( const call_order_object& order, const asset& pays, const asset& receives );
-         bool fill_order( const force_settlement_object& settle, const asset& pays, const asset& receives );
+         bool fill_order( const limit_order_object& order, const asset& pays, const asset& receives, bool cull_if_small,
+                          const price& fill_price, const bool is_maker );
+         bool fill_order( const call_order_object& order, const asset& pays, const asset& receives,
+                          const price& fill_price, const bool is_maker );
+         bool fill_order( const force_settlement_object& settle, const asset& pays, const asset& receives,
+                          const price& fill_price, const bool is_maker );
 
-         bool check_call_orders( const asset_object& mia, bool enable_black_swan = true );
+         bool check_call_orders( const asset_object& mia, bool enable_black_swan = true, bool for_new_limit_order = false );
 
          // helpers to fill_order
          void pay_order( const account_object& receiver, const asset& receives, const asset& pays );
@@ -429,6 +437,7 @@ namespace graphene { namespace chain {
       private:
          void                  _apply_block( const signed_block& next_block );
          processed_transaction _apply_transaction( const signed_transaction& trx );
+         void                  _cancel_bids_and_revive_mpa( const asset_object& bitasset, const asset_bitasset_data_object& bad );
 
          ///Steps involved in applying a new block
          ///@{
@@ -461,6 +470,7 @@ namespace graphene { namespace chain {
          void update_active_witnesses();
          void update_active_committee_members();
          void update_worker_votes();
+         void process_bids( const asset_bitasset_data_object& bad );
 
          void renew_importance_score(fc::time_point_sec last_maintenance);
          std::unordered_multimap<object_id_type, object_id_type> construct_transfer_graph(

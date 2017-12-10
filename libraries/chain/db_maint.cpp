@@ -247,6 +247,9 @@ void database::update_active_committee_members()
    assert( _committee_count_histogram_buffer.size() > 0 );
    share_type stake_target = (_total_importance_score-_witness_count_histogram_buffer[0]) / 2;
 
+   //TODO: Review this issue
+   //share_type stake_target = (_total_voting_stake-_committee_count_histogram_buffer[0]) / 2;
+
    /// accounts that vote for 0 or 1 witness do not get to express an opinion on
    /// the number of witnesses to have (they abstain and are non-voting accounts)
    uint64_t stake_tally = 0; // _committee_count_histogram_buffer[0];
@@ -255,6 +258,21 @@ void database::update_active_committee_members()
       while( (committee_member_count < _committee_count_histogram_buffer.size() - 1)
              && (stake_tally <= stake_target) )
          stake_tally += _committee_count_histogram_buffer[++committee_member_count];
+   if( stake_target != old_stake_target && old_stake_target > 0 && head_block_time() < fc::time_point_sec(HARDFORK_CORE_353_TIME) )
+   {
+      uint64_t old_stake_tally = 0;
+      size_t old_committee_member_count = 0;
+      while( (old_committee_member_count < _committee_count_histogram_buffer.size() - 1)
+             && (old_stake_tally <= old_stake_target) )
+         old_stake_tally += _committee_count_histogram_buffer[++old_committee_member_count];
+      if( old_committee_member_count != committee_member_count
+              && (old_committee_member_count > GRAPHENE_DEFAULT_MIN_COMMITTEE_MEMBER_COUNT
+                  || committee_member_count > GRAPHENE_DEFAULT_MIN_COMMITTEE_MEMBER_COUNT) )
+      {
+          ilog( "Committee member count mismatch ${old} / ${new}", ("old",old_committee_member_count)("new", committee_member_count) );
+          committee_member_count = old_committee_member_count;
+      }
+   }
 
    const chain_property_object& cpo = get_chain_properties();
    auto committee_members = sort_votable_objects<committee_member_index>(std::max(committee_member_count*2+1, (size_t)cpo.immutable_parameters.min_committee_member_count));
@@ -721,7 +739,7 @@ void deprecate_annual_members( database& db )
 using transfer_graph_type2 = std::unordered_multimap<object_id_type, object_id_type>;
 using node_type2 = transfer_graph_type2::key_type;
 
-uint32_t rec_cycle_search(const transfer_graph_type2& transfer_graph, object_id_type current, object_id_type cycle_target, 
+uint32_t rec_cycle_search(const transfer_graph_type2& transfer_graph, object_id_type current, object_id_type cycle_target,
                               uint16_t length, std::unordered_set<object_id_type> visited = std::unordered_set<object_id_type>{})
 {
   if (current == cycle_target) return 1;
@@ -741,11 +759,11 @@ uint32_t rec_cycle_search(const transfer_graph_type2& transfer_graph, object_id_
 }
 
 
-#if 0        
+#if 0
       using transfer_graph_type = std::unordered_multimap<uint64_t, uint64_t>;
       using node_type = transfer_graph_type::key_type;
 
-std::set<node_type> get_gamma(const transfer_graph_type& transfer_graph, const node_type& base_node) 
+std::set<node_type> get_gamma(const transfer_graph_type& transfer_graph, const node_type& base_node)
 {
       std::set<node_type> gamma{base_node};
       size_t bucket_num = transfer_graph.bucket(base_node);
@@ -755,12 +773,12 @@ std::set<node_type> get_gamma(const transfer_graph_type& transfer_graph, const n
       return gamma;
 };
 
-fc::optional<std::unordered_set<node_type>> get_core(const transfer_graph_type& transfer_graph, node_type node, 
-                                                      double epsilon, uint32_t mu) 
+fc::optional<std::unordered_set<node_type>> get_core(const transfer_graph_type& transfer_graph, node_type node,
+                                                      double epsilon, uint32_t mu)
 {
       //size_t bucket_num = transfer_graph.bucket(node);
       //auto it = transfer_graph.cbegin(bucket_num);
-    
+
       //if (transfer_graph.bucket_size(bucket_num) < mu)
       //      return {};
 
@@ -774,11 +792,11 @@ fc::optional<std::unordered_set<node_type>> get_core(const transfer_graph_type& 
       for (; it != first.cend(); ++it) {
             std::set<node_type> second = get_gamma(transfer_graph, *it);
             std::set<node_type> intersection;
-            std::set_intersection(first.cbegin(), first.cend(), second.cbegin(), second.cend(), 
+            std::set_intersection(first.cbegin(), first.cend(), second.cbegin(), second.cend(),
                         std::inserter(intersection, intersection.begin()));
             double similarity = intersection.size() / std::sqrt(first.size() * second.size());
 
-            std::cerr << node << " <-> " << *it << " : " << 
+            std::cerr << node << " <-> " << *it << " : " <<
                   intersection.size() << " / √(" << first.size() << " * " << second.size() << ") = " <<
                   similarity << std::endl;
 
@@ -837,13 +855,13 @@ std::unordered_map<node_type, uint32_t> cluster_graph_simple(const transfer_grap
                                     else if (reachable_id->second == non_member_id)
                                           reachable_id->second = last_cluster;
                               }
-                        }                        
+                        }
                   }
             }
             else {
                   node_ids[node] = non_member_id;
             }
-      } 
+      }
       std::cerr << "!\n";
       for (auto& id : node_ids) {
       //it = transfer_graph.begin();
@@ -852,7 +870,7 @@ std::unordered_map<node_type, uint32_t> cluster_graph_simple(const transfer_grap
             //auto id = std::make_pair(it->first, node_ids.at(it->first));
             if (id.second == non_member_id) {
                   auto gamma = get_gamma(transfer_graph, id.first);
-                  /*bool is_hub = std::inner_product(gamma.begin(), gamma.end(), gamma.begin(), false, std::logical_or<bool>{}, 
+                  /*bool is_hub = std::inner_product(gamma.begin(), gamma.end(), gamma.begin(), false, std::logical_or<bool>{},
                         [&](const decltype(*gamma.begin())& lhs, const decltype(*gamma.begin())& rhs) {
                               return node_ids.at(lhs) != node_ids.at(rhs);
                   });*/
@@ -908,9 +926,9 @@ std::unordered_map<node_type, uint32_t> cluster_graph_simple(const transfer_grap
                   continue;
 
             std::unordered_set<node_type> passed{node};
-            process_core(node);   
-            std::unordered_set<node_type> two_hops_union;         
-            do {                  
+            process_core(node);
+            std::unordered_set<node_type> two_hops_union;
+            do {
                   for (const auto& passed_node : passed) {
                         size_t bucket_num = transfer_graph.bucket(passed_node);
                         auto it = transfer_graph.cbegin(bucket_num);
@@ -923,10 +941,10 @@ std::unordered_map<node_type, uint32_t> cluster_graph_simple(const transfer_grap
                         process_core(th_node);
                   passed.insert(two_hops_union.begin(), two_hops_union.end());
             } while(!two_hops_union.empty());
-      } 
+      }
       /*manage multiple cores*/
       /*manage hubs*/
-} 
+}
 #endif
 
 struct get_transfer_accounts_visitor
@@ -1037,7 +1055,7 @@ void database::renew_importance_score(fc::time_point_sec last_maintenance)
       auto cycle_target = it->first;
 
       uint32_t cycles_count = rec_cycle_search(transfer_graph, it->second, cycle_target, 100);
-      
+
       account_cycles[it->first] += cycles_count;// ? 1 : 0;
    }
 
@@ -1050,7 +1068,7 @@ void database::renew_importance_score(fc::time_point_sec last_maintenance)
       auto acc_transfers = account_transfers[object_id_type(sender_account.id)];
       auto acc_cycles    = account_cycles[sender_account.id];
 
-      if (acc_transfers > acc_cycles) 
+      if (acc_transfers > acc_cycles)
          acc_transfers -= acc_cycles;
       else
          acc_transfers = 0;
@@ -1058,7 +1076,7 @@ void database::renew_importance_score(fc::time_point_sec last_maintenance)
       //std::cout << sender_account.name << " : " << uint64_t(sender_account.id) << " = " << acc_transfers << '\n';
 
       modify(sender_account.statistics(*this), [&](account_statistics_object& s)
-      {  
+      {
          auto& chrono = s.transfers_chronology;
          auto last_score = 0;
          if (!chrono.empty())
@@ -1113,7 +1131,7 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
             const auto& stats = stake_account.statistics(d);
             /*uint64_t voting_stake = stats.total_core_in_orders.value
                   + (stake_account.cashback_vb.valid() ? (*stake_account.cashback_vb)(d).balance.amount.value: 0)
-                  + d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;  */      
+                  + d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;  */
 
             const auto& gpo = d.get_global_properties();
             //auto current_balance = d.get_balance(stake_account.get_id(), asset_id_type()).amount.value;
@@ -1122,7 +1140,7 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
             //uint64_t importance_score = stats.transfer_rate + balance_multiplier * current_balance;
 
             /*d.modify(stake_account.statistics(d), [&](account_statistics_object& s)
-            {  
+            {
                s.importance_score = importance_score;
             });*/
 
@@ -1249,9 +1267,12 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
    });
 
    // Reset all BitAsset force settlement volumes to zero
-   //for( const asset_bitasset_data_object* d : get_index_type<asset_bitasset_data_index>() )
    for( const auto& d : get_index_type<asset_bitasset_data_index>().indices() )
+   {
       modify( d, [](asset_bitasset_data_object& o) { o.force_settled_volume = 0; });
+      if( d.has_settlement() )
+         process_bids(d);
+   }
 
    // process_budget needs to run at the bottom because
    //   it needs to know the next_maintenance_time
