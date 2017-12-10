@@ -86,6 +86,11 @@ private:
    std::map<chain::public_key_type, fc::ecc::private_key> _private_keys;
    std::set<chain::witness_id_type> _witnesses;
    fc::future<void> _block_production_task;
+
+   bool _generation_enabled = false;
+   fc::future<void> _transaction_generation_task;
+   void schedule_generation_loop();
+   void transaction_generation_loop();
 };
 
 } } //graphene::witness_plugin

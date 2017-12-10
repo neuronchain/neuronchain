@@ -198,7 +198,11 @@ namespace graphene { namespace app {
        trx.validate();
        _callbacks[trx.id()] = cb;
        _app.chain_database()->push_transaction(trx);
-       _app.p2p_node()->broadcast_transaction(trx);
+       //_app.p2p_node()->broadcast_transaction(trx);
+       if (!_app.is_block_producer())
+          _app.p2p_node()->broadcast_transaction(trx);
+       else
+          _app.chain_database()->bundle_transaction(trx);
     }
 
     network_node_api::network_node_api( application& a ) : _app( a )
