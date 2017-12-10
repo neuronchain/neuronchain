@@ -179,6 +179,12 @@ int main(int argc, char** argv) {
       ilog("Started witness node on a chain with ${h} blocks.", ("h", node->chain_database()->head_block_num()));
       ilog("Chain ID is ${id}", ("id", node->chain_database()->get_chain_id()) );
 
+
+      // TEST
+      
+
+      //
+
       int signal = exit_promise->wait();
       ilog("Exiting from signal ${n}", ("n", signal));
       node->shutdown_plugins();

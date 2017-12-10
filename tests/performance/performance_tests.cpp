@@ -49,34 +49,39 @@ BOOST_AUTO_TEST_CASE( sigcheck_benchmark )
       auto pub = fc::ecc::public_key( sig, digest );
    auto end = fc::time_point::now();
    auto elapsed = end-start;
-   wdump( ((100000.0*1000000.0) / elapsed.count()) );
+   wdump(((100000.0*1000000.0) / elapsed.count()) );
 }
 
 BOOST_AUTO_TEST_CASE( trs_benchmark )
-{
+try {
    fc::ecc::private_key nathan_key = fc::ecc::private_key::generate();
    //const auto& key = register_key(nathan_key.get_public_key());
    private_key_type sam_key = generate_private_key("sam");
    const auto& committee_account = account_id_type()(db);   
    std::vector<account_object> accs;
-   for( uint32_t i = 0; i < 1000; ++i ) 
+   for( uint32_t i = 0; i < 1000; ++i )
       accs.emplace_back(create_account("a"+fc::to_string(i), sam_key));
    auto start = fc::time_point::now();
-   for( uint32_t i = 0; i < 1e5; ++i )
+   for( uint32_t i = 0; i < 1e6; ++i )
    {
-      uint32_t num = i % 990;
+      /*uint32_t num = i % 990;
       std::vector<account_id_type> tos(10);
       for (uint32_t j = 0; j < 10; ++j)
-          tos[j] = accs[num + j].id;
-      //const auto& a = accs[i % 1000];
-      //transfer( committee_account, a, asset(1000) );
-      transfer_to_multiple( committee_account.id, std::move(tos), asset(1000));
+          tos[j] = accs[num + j].id;*/
+      const auto& a = accs[i % 1000];
+      fc::async([&]{ 
+          transfer( committee_account, a, asset(1 + i) );
+      });
+      //transfer_to_multiple( committee_account.id, std::move(tos), asset(1000))
+      if (i % 100000)
+        generate_block();
    }
+   
    auto end = fc::time_point::now();
    auto elapsed = end - start;
    wdump( (elapsed) );
    wdump( ((1e6*1e6) / elapsed.count()) );
-}
+} FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_CASE( transfer_benchmark )
 {

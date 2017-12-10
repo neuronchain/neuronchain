@@ -592,7 +592,7 @@ void database::validate_packet(const signed_packet& packet)
    // TODO: Repair signature validation
    //FC_ASSERT( packet.validate_signee( get(*wit_ptr).signing_key ) );
 
-   //elog("Pushing ${x} packet transactions", ("x", packet.transactions.size()));
+   wlog("Pushing ${x} packet transactions", ("x", packet.transactions.size()));
    for (auto& trx : packet.transactions)
       push_transaction( trx, get_node_properties().skip_flags & skip_witness_signature & skip_block_size_check);
 } FC_CAPTURE_AND_RETHROW() }
@@ -614,7 +614,7 @@ processed_transaction database::_apply_transaction(const signed_transaction& trx
                    skip_transaction_signatures |
                    skip_tapos_check |
                    skip_authority_check;
-                   skip_transaction_dupe_check;
+                   //skip_transaction_dupe_check;
 
    if( true || !(skip&skip_validate) )   /* issue #505 explains why this skip_flag is disabled */
       trx.validate();
