@@ -370,71 +370,19 @@ block_production_condition::block_production_condition_enum witness_plugin::mayb
    }
 
 
-   /*static fc::thread genth("transfers_generator");
-   using namespace graphene::chain;
-   uint32_t skip = graphene::chain::database::skip_witness_signature |
-                   graphene::chain::database::skip_transaction_signatures |
-                   graphene::chain::database::skip_tapos_check |
-                   graphene::chain::database::skip_authority_check |
-                   graphene::chain::database::skip_transaction_dupe_check;*/
-//chain::database& db = database();
-   //fc::optional<asset_object> asset_obj = asset( 0 );
-
-   //static fc::mutex mx;
- #if 0
-   auto flood = [&]{
-         //fc::unique_lock<fc::mutex> lock(mx, fc::try_to_lock_t{});
-         //fc::unique_lock<fc::mutex> lock(mx, fc::time_point::now() + fc::seconds(0.5));
-      //if (!mx.try_lock()) return;
-           //fc::time_point begin_gen = fc::time_point::now();
-       signed_transaction tx;
-
-        account_id_type from_id = account_id_type{21};
-      account_id_type to_id = account_id_type{1};
-
-      transfer_operation xfer_op;
-
-      xfer_op.from = from_id;
-      xfer_op.to = to_id;
-      xfer_op.amount =asset( 1 );//asset_obj->amount(1);//asset_obj->amount_from_string("1");
-
-      tx.operations.push_back(xfer_op);
-      const auto& fees = *db.get_global_properties().parameters.current_fees;
-      for( auto& op : tx.operations )
-         fees.set_fee(op);
-      //auto& op = xfer_op;
-      //fees.set_fee(xfer_op);
-      //set_operation_fees( tx, db.get_global_properties().parameters.current_fees);
-      //tx.validate();
-
-   auto dynprops = db.get_dynamic_global_properties();
-
-   for (size_t i = 0; i < 1e6; ++i) {
-//fc::unique_lock<fc::mutex> lock(mx, fc::time_point::now() + fc::seconds(0.1));
-      auto exp = /*fc::time_point::now()*/ dynprops.time + fc::seconds(i % 86000);
-      tx.set_expiration(exp);
-      tx.operations.front().get<transfer_operation>().amount = asset(i % 100000000 + 1);
-
-      //tx = sign_transaction(tx, false);
-      auto res = db.push_transaction( tx, skip );
-        //fc::time_point end_gen = fc::time_point::now();
-  //ilog("Generation time: ${gent}", ("gent", end_gen - begin_gen));
-  //mx.unlock();
-   }
-  };
-#endif
-
-  
-//fc::unique_lock<fc::mutex> lock(mx);
-   wlog("Begin block generation");
+   //wlog("Begin block generation");
+   //auto start = fc::time_point::now();
    auto block = db.generate_block(
       scheduled_time,
       scheduled_witness,
       private_key_itr->second,
       _production_skip_flags
       );
+   //auto dur = fc::time_point::now() - start;
+   //idump((dur.count() / 1000));
    elog("New block with ${txs} transactions", ("txs", block.transactions.size()));
    capture("n", block.block_num())("t", block.timestamp)("c", now);
+   //p2p_node().broadcast(net::block_message(block));
    fc::async( [this,block](){ p2p_node().broadcast(net::block_message(block)); } );
 
   
@@ -448,12 +396,18 @@ void witness_plugin::schedule_generation_loop()
 {
    //Schedule for the next second's tick regardless of chain state
    // If we would wait less than 50ms, wait for the whole second.
+   static size_t steps = 0;
    fc::time_point now = fc::time_point::now();
    int64_t time_to_next_second = 1000000 - (now.time_since_epoch().count() % 1000000);
    if( time_to_next_second < 50000 )      // we must sleep for at least 50ms
       time_to_next_second += 1000000;
 
-   fc::time_point next_wakeup( now + fc::microseconds( time_to_next_second + 1000000) );
+   auto add = fc::seconds(6);
+   if (steps++ > 4) {
+      steps = 0;
+      add = fc::seconds(25);
+   }
+   fc::time_point next_wakeup( now + fc::microseconds( time_to_next_second) + add );
 
    //wdump( (now.time_since_epoch().count())(next_wakeup.time_since_epoch().count()) );
    _transaction_generation_task = fc::schedule([this]{transaction_generation_loop();},
@@ -474,14 +428,14 @@ void witness_plugin::transaction_generation_loop()
    static size_t step = 1;
    static uint64_t nonce = 0;
    static uint16_t to = 6;
-   auto flood = [&]{
+   //auto flood = [&]{
        //fc::unique_lock<fc::mutex> lock(mx, fc::try_to_lock_t{});
        //fc::unique_lock<fc::mutex> lock(mx, fc::time_point::now() + fc::seconds(0.5));
        //if (!mx.try_lock()) return;
        //fc::time_point begin_gen = fc::time_point::now();
        signed_transaction tx;
 
-       tx.ref_block_num = db.head_block_num();
+       //tx.ref_block_num = db.head_block_num();
        //tx.ref_block_prefix = db.head_block_id();
 
        account_id_type from_id = account_id_type{17};
@@ -508,11 +462,12 @@ void witness_plugin::transaction_generation_loop()
 
        auto dynprops = db.get_dynamic_global_properties();
 
-       for (size_t i = 0; i < 5e4; ++i) {
+       const int64_t transactions_num = 300000;
+       for (size_t i = 0; i < transactions_num; ++i) {
 //fc::unique_lock<fc::mutex> lock(mx, fc::time_point::now() + fc::seconds(0.1));
           auto exp = /*fc::time_point::now()*/ dynprops.time + fc::seconds(i % 86000);
           tx.set_expiration(exp);
-          tx.operations.front().get<transfer_operation>().amount = asset( (nonce * 10000 + i) % 100000000 + 1);
+          tx.operations.front().get<transfer_operation>().amount = asset( (nonce * transactions_num + i) % 100000000 + 1);
           //xfer_op.memo->nonce = nonce++;
           //std::string str = std::to_string(nonce);
           //xfer_op.memo->message = std::vector<char>(str.begin(), str.end());
@@ -527,8 +482,8 @@ void witness_plugin::transaction_generation_loop()
           //mx.unlock();
        }
        ++nonce;
-   };
-   flood();
+   //};
+   //flood();
 
    if (nonce > 100)
       nonce = 0;

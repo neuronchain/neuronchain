@@ -36,7 +36,7 @@
 /**
  * 2MiB
  */
-#define MAX_MESSAGE_SIZE                                     1024*1024*2
+#define MAX_MESSAGE_SIZE                                     1024*1024*50
 #define GRAPHENE_NET_DEFAULT_PEER_CONNECTION_RETRY_TIME      30 // seconds
 
 /**
@@ -45,7 +45,7 @@
  */
 #define GRAPHENE_PEER_DATABASE_RETRY_DELAY                   15 // seconds
 
-#define GRAPHENE_NET_PEER_HANDSHAKE_INACTIVITY_TIMEOUT       5
+#define GRAPHENE_NET_PEER_HANDSHAKE_INACTIVITY_TIMEOUT       10
 
 #define GRAPHENE_NET_PEER_DISCONNECT_TIMEOUT                 20
 
@@ -59,7 +59,7 @@
 #define GRAPHENE_NET_DEFAULT_DESIRED_CONNECTIONS             20
 #define GRAPHENE_NET_DEFAULT_MAX_CONNECTIONS                 200
 
-#define GRAPHENE_NET_MAXIMUM_QUEUED_MESSAGES_IN_BYTES        (10 * 1024 * 1024)
+#define GRAPHENE_NET_MAXIMUM_QUEUED_MESSAGES_IN_BYTES        (80 * 1024 * 1024)
 
 /**
  * When we receive a message from the network, we advertise it to

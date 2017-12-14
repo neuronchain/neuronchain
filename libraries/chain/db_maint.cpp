@@ -245,7 +245,8 @@ void database::update_active_witnesses()
 void database::update_active_committee_members()
 { try {
    assert( _committee_count_histogram_buffer.size() > 0 );
-   share_type stake_target = (_total_importance_score-_witness_count_histogram_buffer[0]) / 2;
+   //share_type stake_target = (_total_importance_score-_witness_count_histogram_buffer[0]) / 2;
+   share_type stake_target = (_total_importance_score-_committee_count_histogram_buffer[0]) / 2;
 
    //TODO: Review this issue
    //share_type stake_target = (_total_voting_stake-_committee_count_histogram_buffer[0]) / 2;
@@ -258,7 +259,7 @@ void database::update_active_committee_members()
       while( (committee_member_count < _committee_count_histogram_buffer.size() - 1)
              && (stake_tally <= stake_target) )
          stake_tally += _committee_count_histogram_buffer[++committee_member_count];
-   if( stake_target != old_stake_target && old_stake_target > 0 && head_block_time() < fc::time_point_sec(HARDFORK_CORE_353_TIME) )
+   /*if( stake_target != old_stake_target && old_stake_target > 0 && head_block_time() < fc::time_point_sec(HARDFORK_CORE_353_TIME) )
    {
       uint64_t old_stake_tally = 0;
       size_t old_committee_member_count = 0;
@@ -272,7 +273,7 @@ void database::update_active_committee_members()
           ilog( "Committee member count mismatch ${old} / ${new}", ("old",old_committee_member_count)("new", committee_member_count) );
           committee_member_count = old_committee_member_count;
       }
-   }
+   }*/
 
    const chain_property_object& cpo = get_chain_properties();
    auto committee_members = sort_votable_objects<committee_member_index>(std::max(committee_member_count*2+1, (size_t)cpo.immutable_parameters.min_committee_member_count));
@@ -1265,14 +1266,6 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
       d.next_maintenance_time = next_maintenance_time;
       d.accounts_registered_this_interval = 0;
    });
-
-   // Reset all BitAsset force settlement volumes to zero
-   for( const auto& d : get_index_type<asset_bitasset_data_index>().indices() )
-   {
-      modify( d, [](asset_bitasset_data_object& o) { o.force_settled_volume = 0; });
-      if( d.has_settlement() )
-         process_bids(d);
-   }
 
    // process_budget needs to run at the bottom because
    //   it needs to know the next_maintenance_time

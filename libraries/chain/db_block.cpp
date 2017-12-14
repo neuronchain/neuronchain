@@ -316,6 +316,8 @@ signed_block database::_generate_block(
    )
 {
    try {
+      //wlog("0");
+
    uint32_t skip = get_node_properties().skip_flags;
    uint32_t slot_num = get_slot_at_time( when );
    FC_ASSERT( slot_num > 0 );
@@ -500,6 +502,14 @@ void database::_apply_block( const signed_block& next_block )
    _current_block_num    = next_block_num;
    _current_trx_in_block = 0;
 
+      //wlog("1");
+
+/*   static const size_t num_workers = 4;
+   static std::vector<fc::thread> workers;
+   for (size_t i = 0; i < num_workers; ++i)
+      workers.push_back(fc::thread("block worker " + std::to_string(i)));
+
+   size_t step = 0;*/
    for( const auto& trx : next_block.transactions )
    {
       /* We do not need to push the undo state for each transaction
@@ -508,9 +518,13 @@ void database::_apply_block( const signed_block& next_block )
        * for transactions when validating broadcast transactions or
        * when building a block.
        */
+      //workers[step % num_workers].async([&]{ apply_transaction(trx, skip); });
+      //step++;
       apply_transaction( trx, skip );
       ++_current_trx_in_block;
    }
+
+      //wlog("2");
 
    update_global_dynamic_data(next_block);
    update_signing_witness(signing_witness, next_block);
@@ -527,6 +541,8 @@ void database::_apply_block( const signed_block& next_block )
    update_expired_feeds();
    update_withdraw_permissions();
 
+      //wlog("3");
+
    // n.b., update_maintenance_flag() happens this late
    // because get_slot_time() / get_slot_at_time() is needed above
    // TODO:  figure out if we could collapse this function into
@@ -540,6 +556,8 @@ void database::_apply_block( const signed_block& next_block )
    // notify observers that the block has been applied
    applied_block( next_block ); //emit
    _applied_ops.clear();
+
+      //wlog("4");
 
    notify_changed_objects();
 } FC_CAPTURE_AND_RETHROW( (next_block.block_num()) )  }
@@ -592,8 +610,11 @@ void database::validate_packet(const signed_packet& packet)
    //FC_ASSERT( packet.validate_signee( get(*wit_ptr).signing_key ) );
 
    wlog("Pushing ${x} packet transactions", ("x", packet.transactions.size()));
+   //fc::time_point start = fc::time_point::now();
    for (auto& trx : packet.transactions)
       push_transaction( trx, get_node_properties().skip_flags & skip_witness_signature & skip_block_size_check);
+   //auto dur = fc::time_point::now() - start;
+   //idump((dur.count() / 1000));
 } FC_CAPTURE_AND_RETHROW() }
 
 processed_transaction database::apply_transaction(const signed_transaction& trx, uint32_t skip)
@@ -614,7 +635,7 @@ processed_transaction database::_apply_transaction(const signed_transaction& trx
                    skip_tapos_check |
                    skip_authority_check;
                    //skip_transaction_dupe_check;
-
+      
    if( true || !(skip&skip_validate) )   /* issue #505 explains why this skip_flag is disabled */
       trx.validate();
 
