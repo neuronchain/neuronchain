@@ -70,6 +70,7 @@ class database_api_impl : public std::enable_shared_from_this<database_api_impl>
       map<uint32_t, optional<block_header>> get_block_header_batch(const vector<uint32_t> block_nums)const;
       optional<signed_block> get_block(uint32_t block_num)const;
       processed_transaction get_transaction( uint32_t block_num, uint32_t trx_in_block )const;
+      std::vector<processed_transaction> get_transaction_batch(uint32_t block_num, uint32_t trx_begin, uint32_t trx_end)const;
 
       // Globals
       chain_property_object get_chain_properties()const;
@@ -404,6 +405,11 @@ processed_transaction database_api::get_transaction( uint32_t block_num, uint32_
    return my->get_transaction( block_num, trx_in_block );
 }
 
+std::vector<processed_transaction> database_api::get_transaction_batch(uint32_t block_num, uint32_t trx_begin, uint32_t trx_end)const
+{
+   return my->get_transaction_batch( block_num, trx_begin, trx_end );
+}
+
 optional<signed_transaction> database_api::get_recent_transaction_by_id( const transaction_id_type& id )const
 {
    try {
@@ -419,6 +425,20 @@ processed_transaction database_api_impl::get_transaction(uint32_t block_num, uin
    FC_ASSERT( opt_block );
    FC_ASSERT( opt_block->transactions.size() > trx_num );
    return opt_block->transactions[trx_num];
+}
+
+std::vector<processed_transaction> database_api_impl::get_transaction_batch(uint32_t block_num, uint32_t trx_begin, uint32_t trx_end)const
+{
+   auto opt_block = _db.fetch_block_by_number(block_num);
+   FC_ASSERT( opt_block );
+   //FC_ASSERT( opt_block->transactions.size() >= trx_end );
+   FC_ASSERT( trx_end >= trx_begin );
+   if (trx_begin > opt_block->transactions.size())
+      return {};
+   if (trx_end > opt_block->transactions.size())
+      trx_end = opt_block->transactions.size();
+   std::vector<processed_transaction> result(opt_block->transactions.begin() + trx_begin, opt_block->transactions.begin() + trx_end);
+   return result;
 }
 
 //////////////////////////////////////////////////////////////////////
