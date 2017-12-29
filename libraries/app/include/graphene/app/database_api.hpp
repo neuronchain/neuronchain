@@ -183,10 +183,16 @@ class database_api
        */
       processed_transaction get_transaction( uint32_t block_num, uint32_t trx_in_block )const;
 
-    /**
-     * @brief used to fetch a batch of transactions in a block.
-     */
+      /**
+       * @brief used to fetch a batch of transactions in a block.
+       */
       std::vector<processed_transaction> get_transaction_batch(uint32_t block_num, uint32_t trx_begin, uint32_t trx_end)const;
+
+      /**
+       * @brief used to fetch a batch of transactions in a block.
+       */
+      uint32_t get_transaction_count(uint32_t block_num)const;
+
       /**
        * If the transaction has not expired, this method will return the transaction for the given ID or
        * it will return NULL if it is not known.  Just because it is not known does not mean it wasn't
@@ -654,6 +660,7 @@ FC_API(graphene::app::database_api,
    (get_transaction)
    (get_recent_transaction_by_id)
    (get_transaction_batch)
+   (get_transaction_count)
 
    // Globals
    (get_chain_properties)
