@@ -39,6 +39,9 @@
 
 #include <fc/smart_ref_impl.hpp>
 
+#include <thread>
+#include <future>
+
 namespace graphene { namespace chain {
 
 bool database::is_known_block( const block_id_type& id )const
@@ -104,6 +107,72 @@ std::vector<block_id_type> database::get_block_ids_on_fork(block_id_type head_of
   result.emplace_back(branches.first.back()->previous_id());
   return result;
 }
+
+template <typename Transaction_Container>
+Transaction_Container database::check_transaction_signatures(const Transaction_Container& trs)
+{ try {
+   if (trs.size() == 0)
+      return trs;
+
+   //auto start = fc::time_point::now();
+
+   Transaction_Container checked_trs;
+
+   const chain_id_type& chain_id = get_chain_id();
+   auto max_auth_depth = get_global_properties().parameters.max_authority_depth;
+
+   size_t workers_size = std::thread::hardware_concurrency();
+   if ((workers_size * 10) > trs.size()) workers_size = trs.size() / 10 + 1;
+
+   using keys_type = flat_set<public_key_type>;
+
+   std::vector<std::future<std::vector<keys_type>>> ftrs;
+   size_t w_num = 0, trx_chunk_size = 1 + ((trs.size() - 1) / workers_size);
+   //wdump((workers_size)(trx_chunk_size));
+   for (size_t w_num = 0; w_num < workers_size; ++w_num) {
+      ftrs.push_back(std::async(std::launch::async, [&, w_num]{
+         std::vector<keys_type> keys_result;
+         for (size_t trx_num = w_num * trx_chunk_size;
+              trx_num < (w_num + 1) * trx_chunk_size && trx_num < trs.size();
+              ++trx_num ) {
+            keys_result.push_back(trs.at(trx_num).get_signature_keys(chain_id));
+         }
+         //wdump((w_num)(keys_result));
+         return keys_result;
+      }));
+   }
+
+   auto get_active = [&](account_id_type id) { return &id(*this).active; };
+   auto get_owner  = [&](account_id_type id) { return &id(*this).owner;  };
+
+   for (size_t ftr_num = 0; ftr_num < workers_size; ++ftr_num) {
+      auto& ftr = ftrs.at(ftr_num);
+      //wdump((ftr_num)(ftr.valid()));
+      if (ftr.valid()) {
+         size_t trx_start = ftr_num * trx_chunk_size;
+         if ( trx_start > trs.size())
+            continue;
+         auto keys = ftr.get();
+         //wdump((keys));
+         for (size_t key_num = 0; key_num < keys.size(); ++key_num) {
+            size_t index = trx_start + key_num;
+            if (index > trs.size()) break;
+            auto &trx = trs.at(index);
+            try {
+               verify_authority(trx.operations, keys.at(key_num), get_active, get_owner, max_auth_depth);
+               checked_trs.push_back(trx);
+            } FC_CAPTURE_AND_LOG( (0) )
+         }
+      }
+   }
+   //auto end = fc::time_point::now();
+   //auto signature_duration = end - start;
+   //wdump((trs.size())(signature_duration.count() / 1000));
+
+   //wdump((trs)(checked_trs));
+   return checked_trs;
+} FC_CAPTURE_AND_RETHROW() }
+
 
 /**
  * Push block "may fail" in which case every partial change is unwound.  After
@@ -316,7 +385,6 @@ signed_block database::_generate_block(
    )
 {
    try {
-      //wlog("0");
 
    uint32_t skip = get_node_properties().skip_flags;
    uint32_t slot_num = get_slot_at_time( when );
@@ -349,6 +417,10 @@ signed_block database::_generate_block(
    _pending_tx_session.reset();
    _pending_tx_session = _undo_db.start_undo_session();
 
+   auto checked_trs = check_transaction_signatures(_pending_tx);
+   //wlog( "Old size: ${s1}, new size: ${s2}", ("s1", _pending_tx.size())("s2", checked_trs.size()) );
+   std::swap(_pending_tx, checked_trs);
+
    uint64_t postponed_tx_count = 0;
    // pop pending state (reset to head block state)
    for( const processed_transaction& tx : _pending_tx )
@@ -365,7 +437,8 @@ signed_block database::_generate_block(
       try
       {
          auto temp_session = _undo_db.start_undo_session();
-         processed_transaction ptx = _apply_transaction( tx );
+         //processed_transaction ptx = _apply_transaction( tx );
+         processed_transaction ptx = apply_transaction( tx, skip | skip_transaction_signatures);
          temp_session.merge();
 
          // We have to recompute pack_size(ptx) because it may be different
@@ -408,8 +481,7 @@ signed_block database::_generate_block(
       FC_ASSERT( fc::raw::pack_size(pending_block) <= get_global_properties().parameters.maximum_block_size );
    }
 
-   push_block( pending_block, skip );
-
+   push_block( pending_block, skip | skip_witness_signature);
    return pending_block;
 } FC_CAPTURE_AND_RETHROW( (witness_id) ) }
 
@@ -502,15 +574,15 @@ void database::_apply_block( const signed_block& next_block )
    _current_block_num    = next_block_num;
    _current_trx_in_block = 0;
 
-      //wlog("1");
+   //decltype(next_block.transactions) checked_trxs;
+   if (!(skip & skip_transaction_signatures)) {
+      auto checked_trxs = check_transaction_signatures(next_block.transactions);
+      FC_ASSERT(next_block.transactions.size() == checked_trxs.size());
+      //std::swap(next_block.transactions, checked_trxs);
+   }
 
-/*   static const size_t num_workers = 4;
-   static std::vector<fc::thread> workers;
-   for (size_t i = 0; i < num_workers; ++i)
-      workers.push_back(fc::thread("block worker " + std::to_string(i)));
-
-   size_t step = 0;*/
    for( const auto& trx : next_block.transactions )
+   //for(const auto& trx : checked_trxs)
    {
       /* We do not need to push the undo state for each transaction
        * because they either all apply and are valid or the
@@ -518,13 +590,10 @@ void database::_apply_block( const signed_block& next_block )
        * for transactions when validating broadcast transactions or
        * when building a block.
        */
-      //workers[step % num_workers].async([&]{ apply_transaction(trx, skip); });
-      //step++;
-      apply_transaction( trx, skip );
+      apply_transaction( trx, skip | skip_transaction_signatures);
+      //apply_transaction( trx, skip );
       ++_current_trx_in_block;
    }
-
-      //wlog("2");
 
    update_global_dynamic_data(next_block);
    update_signing_witness(signing_witness, next_block);
@@ -541,8 +610,6 @@ void database::_apply_block( const signed_block& next_block )
    update_expired_feeds();
    update_withdraw_permissions();
 
-      //wlog("3");
-
    // n.b., update_maintenance_flag() happens this late
    // because get_slot_time() / get_slot_at_time() is needed above
    // TODO:  figure out if we could collapse this function into
@@ -557,8 +624,6 @@ void database::_apply_block( const signed_block& next_block )
    applied_block( next_block ); //emit
    _applied_ops.clear();
 
-      //wlog("4");
-
    notify_changed_objects();
 } FC_CAPTURE_AND_RETHROW( (next_block.block_num()) )  }
 
@@ -572,9 +637,7 @@ void database::bundle_transaction(const signed_transaction& trx, uint32_t skip)
    witness_id_type scheduled_witness = get_scheduled_witness( slot_num );
    FC_ASSERT( scheduled_witness != witness_id );*/
 
-
    //validate_transaction(trx);
-
 
    const chain_parameters& chain_parameters = get_global_properties().parameters;
    const size_t bundle_size = chain_parameters.bundle_size;
@@ -609,10 +672,37 @@ void database::validate_packet(const signed_packet& packet)
    // TODO: Repair signature validation
    //FC_ASSERT( packet.validate_signee( get(*wit_ptr).signing_key ) );
 
-   wlog("Pushing ${x} packet transactions", ("x", packet.transactions.size()));
+   ilog("Pushing ${x} packet transactions", ("x", packet.transactions.size()));
    //fc::time_point start = fc::time_point::now();
+   /*const chain_id_type& chain_id = get_chain_id();
+   auto max_auth_depth = get_global_properties().parameters.max_authority_depth;
+   decltype(packet.transactions) trs_to_push;
+   trs_to_push.reserve(packet.transactions.size());
+   for (auto& trx : packet.transactions) {
+      // validate transaction signatures
+      try
+      {
+         auto get_active = [&](account_id_type id) { return &id(*this).active; };
+         auto get_owner  = [&](account_id_type id) { return &id(*this).owner;  };
+         trx.verify_authority(chain_id, get_active, get_owner, max_auth_depth);
+         trs_to_push.push_back(trx);
+      }
+      FC_CAPTURE_AND_LOG( (0) )
+   }*/
+
+   /*std::vector<std::future<void>> ftrs;
+   for (size_t i = 0; i < packet.transactions.size(); i += 5000) {
+      ftrs.push_back(std::async(std::launch::async, [&, i]{
+          for (size_t tr_num = 0; tr_num < 5000 && tr_num + i < packet.transactions.size(); ++tr_num)
+             push_transaction( packet.transactions.at(tr_num + i), get_node_properties().skip_flags | skip_witness_signature | skip_block_size_check | skip_transaction_signatures);
+      }));
+   }
+   for(auto& ftr : ftrs)
+      ftr.wait();*/
+
    for (auto& trx : packet.transactions)
-      push_transaction( trx, get_node_properties().skip_flags & skip_witness_signature & skip_block_size_check);
+      push_transaction( trx, get_node_properties().skip_flags | skip_block_size_check);
+      //push_transaction( trx, get_node_properties().skip_flags | skip_witness_signature | skip_block_size_check | skip_transaction_signatures);
    //auto dur = fc::time_point::now() - start;
    //idump((dur.count() / 1000));
 } FC_CAPTURE_AND_RETHROW() }
@@ -629,13 +719,8 @@ processed_transaction database::apply_transaction(const signed_transaction& trx,
 
 processed_transaction database::_apply_transaction(const signed_transaction& trx)
 { try {
-   //uint32_t skip = get_node_properties().skip_flags;
-   uint32_t skip = skip_witness_signature |
-                   skip_transaction_signatures |
-                   skip_tapos_check |
-                   skip_authority_check;
-                   //skip_transaction_dupe_check;
-      
+   uint32_t skip = get_node_properties().skip_flags;
+
    if( true || !(skip&skip_validate) )   /* issue #505 explains why this skip_flag is disabled */
       trx.validate();
 
@@ -674,6 +759,9 @@ processed_transaction database::_apply_transaction(const signed_transaction& trx
       FC_ASSERT( now <= trx.expiration, "", ("now",now)("trx.exp",trx.expiration) );
    }
 
+/*processed_transaction ptrx;
+{
+std::lock_guard<std::mutex> lock(mt);*/
    //Insert transaction into unique transactions database.
    if( !(skip & skip_transaction_dupe_check) )
    {
@@ -687,6 +775,7 @@ processed_transaction database::_apply_transaction(const signed_transaction& trx
 
    //Finally process the operations
    processed_transaction ptrx(trx);
+   ptrx = trx;
    _current_op_in_trx = 0;
    for( const auto& op : ptrx.operations )
    {
@@ -699,6 +788,7 @@ processed_transaction database::_apply_transaction(const signed_transaction& trx
    const auto& index = get_index_type<account_balance_index>().indices().get<by_account_asset>();
    auto range = index.equal_range( boost::make_tuple( GRAPHENE_TEMP_ACCOUNT ) );
    std::for_each(range.first, range.second, [](const account_balance_object& b) { FC_ASSERT(b.balance == 0); });
+//}
 
    return ptrx;
 } FC_CAPTURE_AND_RETHROW( (trx) ) }

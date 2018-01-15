@@ -77,7 +77,8 @@ void witness_plugin::plugin_set_program_options(
          ("private-key", bpo::value<vector<string>>()->composing()->multitoken()->
           DEFAULT_VALUE_VECTOR(std::make_pair(chain::public_key_type(default_priv_key.get_public_key()), graphene::utilities::key_to_wif(default_priv_key))),
           "Tuple of [PublicKey, WIF private key] (may specify multiple times)")
-         ("enable-transaction-generator", bpo::bool_switch()->notifier([this](bool e){_generation_enabled = e;}), "Enable transaction generator node.")
+         //("enable-transaction-generator", bpo::bool_switch()->notifier([this](bool e){_generation_enabled = e;}), "Enable transaction generator node.")
+         //("generate-transactions", bpo::value<uint32_t>()->default_value(0), "Generate fixed number of transactions periodically")
          ;
    config_file_options.add(command_line_options);
 }
@@ -139,10 +140,13 @@ void witness_plugin::plugin_startup()
       schedule_production_loop();
    } else
       elog("No witnesses configured! Please add witness IDs and private keys to configuration.");
+   //if (_options["generate-transactions"].as<uint32_t>() > 0)
    if (_generation_enabled)
    {
       //schedule_generation_loop();
+      fc::time_point now = fc::time_point::now();
       fc::time_point next_wakeup( fc::time_point::now() + fc::seconds( 40 ) );
+      //wdump( (now.time_since_epoch().count())(next_wakeup.time_since_epoch().count()) );
       _transaction_generation_task = fc::schedule([this] { transaction_generation_loop(); },
                                                   next_wakeup, "Transaction generator");
    }
@@ -214,64 +218,10 @@ block_production_condition::block_production_condition_enum witness_plugin::bloc
       result = block_production_condition::exception_producing_block;
    }
 
-
-   static fc::thread genth("transfers_generator");
-   using namespace graphene::chain;
-   uint32_t skip = graphene::chain::database::skip_witness_signature |
-                   graphene::chain::database::skip_transaction_signatures |
-                   graphene::chain::database::skip_tapos_check |
-                   graphene::chain::database::skip_authority_check |
-                   graphene::chain::database::skip_transaction_dupe_check;
-chain::database& db = database();
-   //fc::optional<asset_object> asset_obj = asset( 0 );
-static size_t step = 1;  
-auto flood = [&]{
-         //fc::unique_lock<fc::mutex> lock(mx, fc::try_to_lock_t{});
-         //fc::unique_lock<fc::mutex> lock(mx, fc::time_point::now() + fc::seconds(0.5));
-      //if (!mx.try_lock()) return;
-           //fc::time_point begin_gen = fc::time_point::now();
-       signed_transaction tx;
-
-        account_id_type from_id = account_id_type{21};
-      account_id_type to_id = account_id_type{1};
-
-      transfer_operation xfer_op;
-
-      xfer_op.from = from_id;
-      xfer_op.to = to_id;
-      xfer_op.amount =asset( 1 );//asset_obj->amount(1);//asset_obj->amount_from_string("1");
-
-      tx.operations.push_back(xfer_op);
-      const auto& fees = *db.get_global_properties().parameters.current_fees;
-      for( auto& op : tx.operations )
-         fees.set_fee(op);
-      //auto& op = xfer_op;
-      //fees.set_fee(xfer_op);
-      //set_operation_fees( tx, db.get_global_properties().parameters.current_fees);
-      //tx.validate();
-
-   auto dynprops = db.get_dynamic_global_properties();
-
-   for (size_t i = 0; i < 2e6; ++i) {
-//fc::unique_lock<fc::mutex> lock(mx, fc::time_point::now() + fc::seconds(0.1));
-      auto exp = /*fc::time_point::now()*/ dynprops.time + fc::seconds(i % 86000);
-      tx.set_expiration(exp);
-      tx.operations.front().get<transfer_operation>().amount = asset(i % 100000000 + 1);
-
-      //tx = sign_transaction(tx, false);
-      auto res = db.push_transaction( tx, skip );
-        //fc::time_point end_gen = fc::time_point::now();
-  //ilog("Generation time: ${gent}", ("gent", end_gen - begin_gen));
-  //mx.unlock();
-   }
-  };
    switch( result )
    {
       case block_production_condition::produced: 
          ilog("Generated block #${n} with timestamp ${t} at time ${c}", (capture));
-            /*if (step++ % 5 == 0)
-                  flood();*/
-
          break;
       
       case block_production_condition::not_synced:
@@ -380,7 +330,7 @@ block_production_condition::block_production_condition_enum witness_plugin::mayb
       );
    //auto dur = fc::time_point::now() - start;
    //idump((dur.count() / 1000));
-   elog("New block with ${txs} transactions", ("txs", block.transactions.size()));
+   ilog("New block with ${txs} transactions", ("txs", block.transactions.size()));
    capture("n", block.block_num())("t", block.timestamp)("c", now);
    //p2p_node().broadcast(net::block_message(block));
    fc::async( [this,block](){ p2p_node().broadcast(net::block_message(block)); } );
@@ -403,7 +353,7 @@ void witness_plugin::schedule_generation_loop()
       time_to_next_second += 1000000;
 
    auto add = fc::seconds(6);
-   if (steps++ > 4) {
+   if (steps++ > 3) {
       steps = 0;
       add = fc::seconds(25);
    }
@@ -416,6 +366,7 @@ void witness_plugin::schedule_generation_loop()
 
 void witness_plugin::transaction_generation_loop()
 {
+   //wlog("transaction generation loop start");
    //static fc::thread genth("transfers_generator");
    using namespace graphene::chain;
    uint32_t skip = graphene::chain::database::skip_witness_signature |
@@ -461,11 +412,17 @@ void witness_plugin::transaction_generation_loop()
        //tx.validate();
 
        auto dynprops = db.get_dynamic_global_properties();
+       const auto& chain_id = db.get_chain_id();
 
-       const int64_t transactions_num = 300000;
+       //tx.set_reference_block( dynprops.head_block_id );
+       tx.signatures.clear();
+
+       //wdump((_options["generate-transactions"].as<uint32_t>()));
+       const int64_t transactions_num = _options["generate-transactions"].as<uint32_t>();//6000;
+       std::vector<signed_transaction> trs;
        for (size_t i = 0; i < transactions_num; ++i) {
-//fc::unique_lock<fc::mutex> lock(mx, fc::time_point::now() + fc::seconds(0.1));
-          auto exp = /*fc::time_point::now()*/ dynprops.time + fc::seconds(i % 86000);
+       //fc::unique_lock<fc::mutex> lock(mx, fc::time_point::now() + fc::seconds(0.1));
+          auto exp = /*fc::time_point::now()*/ dynprops.time + fc::seconds(i % 86000 + 10);
           tx.set_expiration(exp);
           tx.operations.front().get<transfer_operation>().amount = asset( (nonce * transactions_num + i) % 100000000 + 1);
           //xfer_op.memo->nonce = nonce++;
@@ -475,12 +432,18 @@ void witness_plugin::transaction_generation_loop()
           //tx = sign_transaction(tx, false);
 
           //auto res = db.push_transaction( tx, skip );
-          db.bundle_transaction(tx, skip);
+          auto trx_cpy = tx;
+          trx_cpy.sign( _private_keys.begin()->second, chain_id );
+          trs.push_back(std::move(trx_cpy));
+
+          //db.bundle_transaction(tx, skip);
 
           //fc::time_point end_gen = fc::time_point::now();
           //ilog("Generation time: ${gent}", ("gent", end_gen - begin_gen));
           //mx.unlock();
        }
+       for (auto& tr : trs)
+          db.bundle_transaction(tr);
        ++nonce;
    //};
    //flood();

@@ -439,6 +439,9 @@ namespace graphene { namespace chain {
          processed_transaction _apply_transaction( const signed_transaction& trx );
          void                  _cancel_bids_and_revive_mpa( const asset_object& bitasset, const asset_bitasset_data_object& bad );
 
+         template <typename Transaction_Container>
+         Transaction_Container check_transaction_signatures(const Transaction_Container& trs);
+
          ///Steps involved in applying a new block
          ///@{
 
