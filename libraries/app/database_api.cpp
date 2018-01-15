@@ -67,6 +67,7 @@ class database_api_impl : public std::enable_shared_from_this<database_api_impl>
 
       // Blocks and transactions
       optional<block_header> get_block_header(uint32_t block_num)const;
+      optional<signed_block_header> get_signed_block_header(uint32_t block_num)const;
       map<uint32_t, optional<block_header>> get_block_header_batch(const vector<uint32_t> block_nums)const;
       optional<signed_block> get_block(uint32_t block_num)const;
       processed_transaction get_transaction( uint32_t block_num, uint32_t trx_in_block )const;
@@ -376,6 +377,20 @@ optional<block_header> database_api_impl::get_block_header(uint32_t block_num) c
       return *result;
    return {};
 }
+
+optional<signed_block_header> database_api::get_signed_block_header(uint32_t block_num)const
+{
+   return my->get_signed_block_header( block_num );
+}
+
+optional<signed_block_header> database_api_impl::get_signed_block_header(uint32_t block_num) const
+{
+   auto result = _db.fetch_block_by_number(block_num);
+   if (result)
+      return *result;
+   return {};
+}
+
 map<uint32_t, optional<block_header>> database_api::get_block_header_batch(const vector<uint32_t> block_nums)const
 {
    return my->get_block_header_batch( block_nums );

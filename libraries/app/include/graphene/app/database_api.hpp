@@ -164,6 +164,13 @@ class database_api
       optional<block_header> get_block_header(uint32_t block_num)const;
 
       /**
+       * @brief Retrieve a block header
+       * @param block_num Height of the block whose header should be returned
+       * @return header of the referenced block, or null if no matching block was found
+       */
+      optional<signed_block_header> get_signed_block_header(uint32_t block_num)const;
+
+      /**
       * @brief Retrieve multiple block header by block numbers
       * @param block_num vector containing heights of the block whose header should be returned
       * @return array of headers of the referenced blocks, or null if no matching block was found
@@ -655,6 +662,7 @@ FC_API(graphene::app::database_api,
 
    // Blocks and transactions
    (get_block_header)
+   (get_signed_block_header)
    (get_block_header_batch)
    (get_block)
    (get_transaction)
