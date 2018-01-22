@@ -92,6 +92,7 @@
 #define GRAPHENE_DEFAULT_MARGIN_PERIOD_SEC              (30*60*60*24)
 
 #define GRAPHENE_DEFAULT_MIN_WITNESS_COUNT                    (11)
+#define GRAPHENE_DEFAULT_RANDOM_WITNESS_COUNT                 (2)
 #define GRAPHENE_DEFAULT_MIN_COMMITTEE_MEMBER_COUNT           (11)
 #define GRAPHENE_DEFAULT_MAX_WITNESSES                        (1001) // SHOULD BE ODD
 #define GRAPHENE_DEFAULT_MAX_COMMITTEE                        (1001) // SHOULD BE ODD
