@@ -32,6 +32,7 @@ doxygen
 
 wallet.json
 witness_node_data_dir
+.vscode
 
 *.wallet
 
