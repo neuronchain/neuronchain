@@ -469,7 +469,7 @@ boost::numeric::ublas::vector<double> detail::getNCDAwareRank(const outlink_matr
       //matrix M = R * A
       matrix_type matrixR(N, clusters_size, 0);
       for (size_t i = 0; i < N; ++i) {
-            std::unordered_set<uint32_t> proximal_nodes{i};
+            std::unordered_set<uint32_t> proximal_nodes{static_cast<unsigned int>(i)};
             for (size_t i2 = 0; i2 < N; ++i2) {
                   if (outlink_matrix(i,i2) > 0)
                         proximal_nodes.insert(i2);
