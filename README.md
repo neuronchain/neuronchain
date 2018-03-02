@@ -1,4 +1,4 @@
-BitShares Core
+Neuron with PoI
 ==============
 * [Getting Started](#getting-started)
 * [Support](#support)
