@@ -302,6 +302,11 @@ class wallet_api
        */
       variant_object                    about() const;
       optional<signed_block_with_info>    get_block( uint32_t num );
+
+      optional<signed_transaction>          get_recent_transaction_by_id(const transaction_id_type &id);
+
+      vector<variant>                       get_required_fees( const vector<operation>& ops, asset_id_type id );
+
       /** Returns the number of accounts registered on the blockchain
        * @returns the number of registered accounts
        */
@@ -353,6 +358,8 @@ class wallet_api
        * @returns a list of \c operation_history_objects
        */
       vector<operation_detail>  get_account_history(string name, int limit)const;
+
+      vector<operation_detail>  get_account_history_operations(string name,int operation_id, int limit)const;
 
       /** Returns the relative operations on the named account from start number.
        *
@@ -1720,8 +1727,11 @@ FC_API( graphene::wallet::wallet_api,
         (get_account)
         (get_account_id)
         (get_block)
+        (get_recent_transaction_by_id)
+        (get_required_fees)
         (get_account_count)
         (get_account_history)
+        (get_account_history_operations)
         (get_relative_account_history)
         (get_collateral_bids)
         (is_public_key_registered)

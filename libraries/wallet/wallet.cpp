@@ -2958,6 +2958,14 @@ optional<signed_block_with_info> wallet_api::get_block(uint32_t num)
    return my->_remote_db->get_block(num);
 }
 
+optional<signed_transaction> wallet_api::get_recent_transaction_by_id(const transaction_id_type &id){
+   return my->_remote_db->get_recent_transaction_by_id(id);
+}
+
+vector<variant> wallet_api::get_required_fees( const vector<operation>& ops, asset_id_type id ){
+    return my->_remote_db->get_required_fees(ops, id);
+}
+
 uint64_t wallet_api::get_account_count() const
 {
    return my->_remote_db->get_account_count();
@@ -3001,6 +3009,35 @@ vector<operation_detail> wallet_api::get_account_history(string name, int limit)
 
 
       vector<operation_history_object> current = my->_remote_hist->get_account_history(account_id, operation_history_id_type(), std::min(100,limit), start);
+      for( auto& o : current ) {
+         std::stringstream ss;
+         auto memo = o.op.visit(detail::operation_printer(ss, *my, o.result));
+         result.push_back( operation_detail{ memo, ss.str(), o } );
+      }
+      if( int(current.size()) < std::min(100,limit) )
+         break;
+      limit -= current.size();
+   }
+
+   return result;
+}
+
+vector<operation_detail> wallet_api::get_account_history_operations(string name, int operation_id, int limit)const
+{
+   vector<operation_detail> result;
+   auto account_id = get_account(name).get_id();
+
+   while( limit > 0 )
+   {
+      operation_history_id_type start;
+      if( result.size() )
+      {
+         start = result.back().op.id;
+         start = start + 1;
+      }
+
+
+      vector<operation_history_object> current = my->_remote_hist->get_account_history_operations(account_id, operation_id, start, operation_history_id_type(), std::min(100,limit));
       for( auto& o : current ) {
          std::stringstream ss;
          auto memo = o.op.visit(detail::operation_printer(ss, *my, o.result));
