@@ -23,9 +23,6 @@
  */
 #pragma once
 
-//#define GRAPHENE_SYMBOL "BTS"
-//#define GRAPHENE_ADDRESS_PREFIX "BTS"
-
 #define GRAPHENE_SYMBOL "NER"
 #define GRAPHENE_ADDRESS_PREFIX "NER"
 
@@ -147,7 +144,7 @@
 #define GRAPHENE_RECENTLY_MISSED_COUNT_INCREMENT             4
 #define GRAPHENE_RECENTLY_MISSED_COUNT_DECREMENT             3
 
-#define GRAPHENE_CURRENT_DB_VERSION                          "NEU2.9"
+#define GRAPHENE_CURRENT_DB_VERSION                          "NER3.0"
 
 #define GRAPHENE_IRREVERSIBLE_THRESHOLD                      (70 * GRAPHENE_1_PERCENT)
 
