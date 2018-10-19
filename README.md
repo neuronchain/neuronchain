@@ -20,8 +20,8 @@ We recommend building on Ubuntu 16.04 LTS, and the build dependencies may be ins
 
 To build after all dependencies are installed:
 
-    git clone https://github.com/neuronplatform/neuronplatform.git
-    cd neuronplatform
+    git clone https://github.com/neuronchain/neuronchain.git
+    cd neuronchain
     git checkout <LATEST_RELEASE_TAG>
     git submodule update --init --recursive
     cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .
@@ -60,12 +60,12 @@ To import your initial balance:
 If you send private keys over this connection, `rpc-endpoint` should be bound to localhost for security.
 
 Use `help` to see all available wallet commands. Source definition and listing of all commands is available
-[here](https://github.com/neuronplatform/neuronplatform/blob/master/libraries/wallet/include/graphene/wallet/wallet.hpp).
+[here](https://github.com/neuronchain/neuronchain/blob/master/libraries/wallet/include/graphene/wallet/wallet.hpp).
 
 Support
 -------
 
-Neuron Core bugs can be reported directly to the [issue tracker](https://github.com/neuronplatform/neuronplatform/issues).
+Neuron Core bugs can be reported directly to the [issue tracker](https://github.com/neuronchain/neuronchain/issues).
 
 Using the API
 -------------
@@ -125,7 +125,7 @@ A single asterisk `"*"` may be specified as username or password hash to accept 
 
 With the above configuration, here is an example of how to call `add_node` from the `network_node` API:
 
-    {"id":1, "method":"call", "params":[1,"login",["bytemaster", "supersecret"]]}
+    {"id":1, "method":"call", "params":[1,"login",["neuron", "supersecret"]]}
     {"id":2, "method":"call", "params":[1,"network_node",[]]}
     {"id":3, "method":"call", "params":[2,"add_node",["127.0.0.1:9090"]]}
 
@@ -204,6 +204,6 @@ FAQ
  
 License
 -------
-Neuron Core is under the MIT license. See [LICENSE](https://github.com/neuronplatform/neuronplatform/blob/master/LICENSE.txt)
+Neuron Core is under the MIT license. See [LICENSE](https://github.com/neuronchain/neuronchain/blob/master/LICENSE.txt)
 for more information.
 
