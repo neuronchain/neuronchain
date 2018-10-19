@@ -1,4 +1,4 @@
-Neuron with PoI
+NeuronChain Core
 ==============
 * [Getting Started](#getting-started)
 * [Support](#support)
@@ -7,7 +7,7 @@ Neuron with PoI
 * [FAQ](#faq)
 * [License](#license)
 
-Neuron Core is the Neuron blockchain implementation and command-line interface.
+NeuronChain Core is the NeuronChain blockchain implementation and command-line interface.
 
 
 Getting Started
@@ -27,9 +27,9 @@ To build after all dependencies are installed:
     cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .
     make
 
-**NOTE:** Neuron requires an [OpenSSL](https://www.openssl.org/) version in the 1.0.x series. OpenSSL 1.1.0 and newer are NOT supported. If your system OpenSSL version is newer, then you will need to manually provide an older version of OpenSSL and specify it to CMake using `-DOPENSSL_INCLUDE_DIR`, `-DOPENSSL_SSL_LIBRARY`, and `-DOPENSSL_CRYPTO_LIBRARY`.
+**NOTE:** NeuronChain requires an [OpenSSL](https://www.openssl.org/) version in the 1.0.x series. OpenSSL 1.1.0 and newer are NOT supported. If your system OpenSSL version is newer, then you will need to manually provide an older version of OpenSSL and specify it to CMake using `-DOPENSSL_INCLUDE_DIR`, `-DOPENSSL_SSL_LIBRARY`, and `-DOPENSSL_CRYPTO_LIBRARY`.
 
-**NOTE:** Neuron requires a [Boost](http://www.boost.org/) version in the range [1.57, 1.63]. Versions earlier than
+**NOTE:** NeuronChain requires a [Boost](http://www.boost.org/) version in the range [1.57, 1.63]. Versions earlier than
 1.57 or newer than 1.63 are NOT supported. If your system Boost version is newer, then you will need to manually build
 an older version of Boost and specify it to CMake using `DBOOST_ROOT`.
 
@@ -65,7 +65,7 @@ Use `help` to see all available wallet commands. Source definition and listing o
 Support
 -------
 
-Neuron Core bugs can be reported directly to the [issue tracker](https://github.com/neuronchain/neuronchain/issues).
+NeuronChain Core bugs can be reported directly to the [issue tracker](https://github.com/neuronchain/neuronchain/issues).
 
 Using the API
 -------------
@@ -204,6 +204,6 @@ FAQ
  
 License
 -------
-Neuron Core is under the MIT license. See [LICENSE](https://github.com/neuronchain/neuronchain/blob/master/LICENSE.txt)
+NeuronChain Core is under the MIT license. See [LICENSE](https://github.com/neuronchain/neuronchain/blob/master/LICENSE.txt)
 for more information.
 
