@@ -161,8 +161,7 @@ namespace detail {
          else
          {
              vector<string> seeds = {
-               "ns3087399.ip-145-239-133.eu:1777",
-               "ns3087400.ip-145-239-133.eu:1777"
+               "145.239.205.95:1777"
             };
             for( const string& endpoint_string : seeds )
             {
@@ -483,6 +482,16 @@ namespace detail {
                  ("i",last_irr)("d",blk_msg.block.block_num()-last_irr) );
          }
          FC_ASSERT( (latency.count()/1000) > -5000, "Rejecting block with timestamp in the future" );
+
+         if (_options->count("sync-to"))
+         {
+            uint32_t limit = _options->at("sync-to").as<uint32_t>();
+            if (blk_msg.block.block_num() > limit)
+            {
+               ilog("Synced to ${l}, skipping block",("l", limit));
+               return true;
+            }
+         }
 
          try {
             // TODO: in the case where this block is valid but on a fork that's too old for us to switch to,
@@ -979,6 +988,7 @@ void application::set_program_options(boost::program_options::options_descriptio
          ("resync-blockchain", "Delete all blocks and re-sync with network from scratch")
          ("force-validate", "Force validation of all transactions")
          ("genesis-timestamp", bpo::value<uint32_t>(), "Replace timestamp from genesis.json with current time plus this many seconds (experts only!)")
+         ("sync-to", bpo::value<uint32_t>(), "Resync up to block number")
          ;
    command_line_options.add(_cli_options);
    configuration_file_options.add(_cfg_options);
