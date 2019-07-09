@@ -326,7 +326,6 @@ std::unordered_map<node_type, uint32_t> detail::cluster_graph_simple(const outli
       const uint32_t hub_id = 1;
       uint32_t last_cluster = 1;
 
-      //std::cerr << outlink_matrix << std::endl;
       //auto min_clustering_transfer = get_global_properties().parameters.min_transfer_for_clustering;
       transfer_graph_type transfer_graph;
       for (size_t i = 0; i < outlink_matrix.size1(); ++i) {
@@ -337,23 +336,13 @@ std::unordered_map<node_type, uint32_t> detail::cluster_graph_simple(const outli
                   }
       }
 
-      /*auto it1 = transfer_graph.begin();
-      for (; it1 != transfer_graph.end(); ++it1)
-            std::cerr << it1->first << " -> " << it1->second << std::endl;
-      std::cerr << '\n';*/
-
-
       auto skip_same = [](transfer_graph_type::const_iterator it, transfer_graph_type::const_iterator end) {
             transfer_graph_type::const_iterator last = it++;
             for(; it != end && it->first == last->first; last = it++);
             return it;
       };
 
-      //auto it = transfer_graph.cbegin();
-      //for(; it != transfer_graph.cend(); it = skip_same(it, transfer_graph.cend())) {
       for(const auto& p: accounts_map) {
-            //std::cerr << it->first.instance() << " ";
-            //const auto& node = it->first;
             const auto node = p.second;
             if (node_ids.find(node) != node_ids.end())
                   continue;
@@ -364,10 +353,6 @@ std::unordered_map<node_type, uint32_t> detail::cluster_graph_simple(const outli
                   last_cluster++;
                   node_ids[node] = last_cluster;
                   for (const auto& neighbour : *core_optional) {
-                        /*auto neighbour_id = node_ids.find(neighbour);
-                        if (neighbour_id == node_ids.end()) {
-                              node_ids[neighbour] = last_cluster;
-                        }*/
                         queue.push(neighbour);
                   }
                   while(!queue.empty()) {
@@ -390,13 +375,8 @@ std::unordered_map<node_type, uint32_t> detail::cluster_graph_simple(const outli
             else {
                   node_ids[node] = non_member_id;
             }
-      } 
-      //std::cerr << "!\n";
+      }
       for (auto& id : node_ids) {
-      //it = transfer_graph.begin();
-      //for(; it != transfer_graph.end(); it = skip_same(it, transfer_graph.end())) {
-            //std::cerr << id.first.instance() << ' ';
-            //auto id = std::make_pair(it->first, node_ids.at(it->first));
             if (id.second == non_member_id) {
                   auto gamma = get_gamma(transfer_graph, id.first);
                   /*bool is_hub = std::inner_product(gamma.begin(), gamma.end(), gamma.begin(), false, std::logical_or<bool>{}, 
@@ -406,9 +386,6 @@ std::unordered_map<node_type, uint32_t> detail::cluster_graph_simple(const outli
                   bool is_hub = false;
                   auto g_it1 = gamma.cbegin();
                   auto g_end = gamma.cend();
-                  //std::cerr << id.first << " -> " << std::flush;
-                  for (const auto& gnode : gamma)
-                        //std::cerr << gnode << ' ' << std::flush;
                   for (; g_it1 != g_end && !is_hub; ++g_it1) {
                         for (auto g_it2 = std::next(g_it1); g_it2 != g_end && !is_hub; ++g_it2) {
                               auto id1 = node_ids.at(*g_it1);
@@ -417,11 +394,9 @@ std::unordered_map<node_type, uint32_t> detail::cluster_graph_simple(const outli
                                     is_hub = true;
                         }
                   }
-                  //std::cerr << "!\n";
                   id.second = is_hub ? hub_id : outlier_id;
             }
       }
-      //std::cerr << "!\n";
       return node_ids;
 }
 
@@ -435,36 +410,41 @@ boost::numeric::ublas::vector<double> detail::getNCDAwareRank(const outlink_matr
       size_t N = outlink_matrix.size1();
       size_t min_cluster = std::numeric_limits<size_t>::max();
 
-      //std::cerr << "O: " << outlink_matrix << std::endl;
-
-      std::unordered_map<uint32_t, std::unordered_set<uint32_t>> cluster_sets;
-      for (const auto& p : clusters) {
+      //condense clusters
+      std::unordered_map<uint32_t, std::unordered_set<node_type>> cluster_sets;
+      std::unordered_map<node_type, uint32_t> condensed_clusters;
+      {
+         std::unordered_map<uint32_t, std::unordered_set<node_type>> cluster_sets_sparse;
+         for (const auto &p : clusters) {
             if (p.second < min_cluster) min_cluster = p.second;
-            //clusters_count[p.second]++;
-            cluster_sets[p.second].insert(p.first);
-            //std::cerr << p.first << " -> " << p.second << std::endl;
+            cluster_sets_sparse[p.second].insert(p.first);
+         }
+
+         size_t counter = 0;
+         for (auto &p : cluster_sets_sparse) {
+            auto next_cluster = counter;
+            for (auto node_id : p.second)
+               condensed_clusters[node_id] = next_cluster;
+            cluster_sets[next_cluster] = std::move(p.second);
+            ++counter;
+         }
       }
-      //std::cerr << std::endl;
+
 
       size_t clusters_size = cluster_sets.size();
-      size_t cluster_diff = min_cluster < std::numeric_limits<size_t>::max() ? min_cluster : 0;
-
-      //std::cerr << cluster_diff << " !!!\n";
 
       matrix_type matrixA(clusters_size, N, 0);
-      for (const auto& p : clusters) {
-            matrixA(p.second - cluster_diff, p.first) = 1;
+      for (const auto& p : condensed_clusters) {
+            matrixA(p.second, p.first) = 1;
       }
-      //std::cerr << "A: " << matrixA << std::endl;
-      
+
       matrix_type teleportation_matrix(N, N, 0);
       double block_multiplier = 1. / clusters_size;
       for (size_t j = 0; j < N; ++j) {
-            double val = block_multiplier / cluster_sets.at(clusters.at(j)).size();//cluster_sets.at(j).size();
+            double val = block_multiplier / cluster_sets.at(condensed_clusters.at(j)).size();//cluster_sets.at(j).size();
             for (size_t i = 0; i < N; ++i)
                   teleportation_matrix(i,j) = val;
       }
-      //std::cerr << "E:" << teleportation_matrix << std::endl;
 
       //matrix M = R * A
       matrix_type matrixR(N, clusters_size, 0);
@@ -476,10 +456,10 @@ boost::numeric::ublas::vector<double> detail::getNCDAwareRank(const outlink_matr
             }
             std::set<uint32_t> proximity_clusters;
             for (const uint32_t node : proximal_nodes) {
-                  proximity_clusters.insert(clusters.at(node));
+                  proximity_clusters.insert(condensed_clusters.at(node));
             }
             for (size_t j = 0; j < clusters_size; ++j) {
-                  uint32_t cluster = j + cluster_diff;
+                  uint32_t cluster = j;
                   if (proximity_clusters.find(cluster) != proximity_clusters.end()) {
                         matrixR(i,j) = 1. / proximity_clusters.size() / cluster_sets.at(cluster).size();
                   }
